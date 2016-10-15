@@ -4,20 +4,20 @@
 void events(void) {
 
 	int ictbeam=0, ipage=0, istract=0, line, i, j, k, l, ixhold, iyhold;
-	double fintim = d.date + Time, datemin, xtime, repair, yank;
+	double fintim = g_d.stardate + Time, datemin, xtime, repair, yank;
 	
 
 #ifdef DEBUG
 	if (idebug) prout("EVENTS");
 #endif
 
-	if (stdamtim == 1e30 && !REPORTS)
+	if (ship_date_chart_damaged == 1e30 && !REPORTS)
 	{
 		/* chart will no longer be updated because radio is dead */
-		stdamtim = d.date;
+		ship_date_chart_damaged = g_d.stardate;
 		for (i=1; i <= 8 ; i++)
 			for (j=1; j <= 8; j++)
-				if (starch[i][j] == 1) starch[i][j] = d.galaxy[i][j]+1000;
+				if (starch[i][j] == 1) starch[i][j] = g_d.galaxy[i][j]+1000;
 	}
 
 	for (;;) {
@@ -30,58 +30,58 @@ void events(void) {
 				line = l;
 				datemin = future[l];
 			}
-		xtime = datemin-d.date;
+		xtime = datemin-g_d.stardate;
 #ifdef CLOAKING
 		if (iscloaking) {
-			energy -= xtime*500.0;
-			if (energy <= 0.) {
+			ship_energy -= xtime*500.0;
+			if (ship_energy <= 0.) {
 				finish(FNRG);
 				return;
 			}
 		}
 #endif
-		d.date = datemin;
+		g_d.stardate = datemin;
 		/* Decrement Federation resources and recompute remaining time */
-		d.remres -= (d.remkl+4*d.remcom)*xtime;
-		d.remtime = d.remres/(d.remkl+4*d.remcom);
-		if (d.remtime <=0) {
+		g_d.remaining_resources -= (g_d.remaining_klingons+4*g_d.remaining_commanders)*xtime;
+		g_d.remaining_time = g_d.remaining_resources/(g_d.remaining_klingons+4*g_d.remaining_commanders);
+		if (g_d.remaining_time <=0) {
 			finish(FDEPLETE);
 			return;
 		}
 		/* Is life support adequate? */
-		if (damage[DLIFSUP] && condit != IHDOCKED) {
-			if (lsupres < xtime && damage[DLIFSUP] > lsupres) {
+		if (damage[DLIFSUP] && ship_condition != IHDOCKED) {
+			if (ship_life_support_reserves < xtime && damage[DLIFSUP] > ship_life_support_reserves) {
 				finish(FLIFESUP);
 				return;
 			}
-			lsupres -= xtime;
-			if (damage[DLIFSUP] <= xtime) lsupres = inlsr;
+			ship_life_support_reserves -= xtime;
+			if (damage[DLIFSUP] <= xtime) ship_life_support_reserves = game_initial_lifesupport;
 		}
 		/* Fix devices */
 		repair = xtime;
-		if (condit == IHDOCKED) repair /= docfac;
+		if (ship_condition == IHDOCKED) repair /= docfac;
 		/* Don't fix Deathray here */
 		for (l=1; l<=ndevice; l++)
 			if (damage[l] > 0.0 && l != DDRAY)
                 damage[l] -= (damage[l]-repair > 0.0 ? repair : damage[l]);
         /* Fix Deathray if docked */
-        if (damage[DDRAY] > 0.0 && condit == IHDOCKED)
+        if (damage[DDRAY] > 0.0 && ship_condition == IHDOCKED)
             damage[DDRAY] -= (damage[l] - xtime > 0.0 ? xtime : damage[DDRAY]);
 		/* If radio repaired, update star chart and attack reports */
-		if (stdamtim != 1e30 && REPORTS) {
-			stdamtim = 1e30;
+		if (ship_date_chart_damaged != 1e30 && REPORTS) {
+			ship_date_chart_damaged = 1e30;
 			prout("Lt. Uhura- \"Captain, the sub-space radio is working and");
 			prout("   surveillance reports are coming in.");
 			skip(1);
 			for (i=1; i <= 8 ; i++)
 				for (j=1; j <= 8; j++)
 					if (starch[i][j] > 999) starch[i][j] = 1;
-			if (iseenit==0) {
+			if (has_seen_attack_report==0) {
 				attakreport();
-				iseenit = 1;
+				has_seen_attack_report = 1;
 			}
 			skip(1);
-			prout("   The star chart is now up to date.\"");
+			prout("   The star chart is now up to stardate.\"");
 			skip(1);
 		}
 		/* Cause extraneous event LINE to occur */
@@ -91,44 +91,44 @@ void events(void) {
 				if (ipage==0) pause(1);
 				ipage=1;
 				snova(0,0);
-				future[FSNOVA] = d.date + expran(0.5*intime);
-				if (d.galaxy[quadx][quady] == 1000) return;
+				future[FSNOVA] = g_d.stardate + expran(0.5*game_initial_time);
+				if (g_d.galaxy[quadx][quady] == 1000) return;
 				break;
 			case FSPY: /* Check with spy to see if S.C. should tractor beam */
-                if (d.nscrem == 0 ||
+                if (g_d.remaining_supercommanders == 0 ||
 #ifdef CLOAKING
                       iscloaked ||  /* Cannot tractor beam if we can't be seen! */
 #endif
 					ictbeam+istract > 0 ||
-					condit==IHDOCKED || isatb==1 || iscate==1) return;
+					ship_condition==IHDOCKED || is_supercommander_attacking_base==1 || currentq_is_supercommander_here==1) return;
 				if (ientesc ||
-					(energy < 2000 && torps < 4 && shield < 1250) ||
+					(ship_energy < 2000 && torps < 4 && ship_shield_strength < 1250) ||
 					(damage[DPHASER]>0 && (damage[DPHOTON]>0 || torps < 4)) ||
 					(damage[DSHIELD] > 0 &&
-					 (energy < 2500 || damage[DPHASER] > 0) &&
+					 (ship_energy < 2500 || damage[DPHASER] > 0) &&
 					 (torps < 5 || damage[DPHOTON] > 0))) {
 					/* Tractor-beam her! */
 					istract=1;
-					yank = square(d.isx-quadx) + square(d.isy-quady);
+					yank = square(g_d.qx_supercommander-quadx) + square(g_d.qy_supercommander-quady);
 					/*********TBEAM CODE***********/
 				}
 				else return;
 			case FTBEAM: /* Tractor beam */
 				if (line==FTBEAM) {
-					if (d.remcom == 0) {
+					if (g_d.remaining_commanders == 0) {
 						future[FTBEAM] = 1e30;
 						break;
 					}
-					i = Rand()*d.remcom+1.0;
-					yank = square(d.cx[i]-quadx) + square(d.cy[i]-quady);
-                    if (istract || condit == IHDOCKED ||
+					i = (int)(Rand()*g_d.remaining_commanders+1.0);
+					yank = square(g_d.qx_commander[i]-quadx) + square(g_d.qy_commander[i]-quady);
+                    if (istract || ship_condition == IHDOCKED ||
 #ifdef CLOAKING
                           iscloaked || /* cannot tractor beam if we can't be seen */
 #endif
                           yank == 0) {
 						/* Drats! Have to reschedule */
-						future[FTBEAM] = d.date + Time +
-										 expran(1.5*intime/d.remcom);
+						future[FTBEAM] = g_d.stardate + Time +
+										 expran(1.5*game_initial_time/g_d.remaining_commanders);
 						break;
 					}
 				}
@@ -145,30 +145,30 @@ void events(void) {
 				/* If Kirk & Co. screwing around on planet, handle */
 				atover(1); /* atover(1) is Grab */
 				if (alldone) return;
-				if (icraft == 1) { /* Caught in Galileo? */
+				if (is_aboard_shuttle == 1) { /* Caught in Galileo? */
 					finish(FSTRACTOR);
 					return;
 				}
 				/* Check to see if shuttle is aboard */
-				if (iscraft==0) {
+				if (has_suttlecraft==0) {
 					skip(1);
 					if (Rand() >0.5) {
 						prout("Galileo, left on the planet surface, is captured");
 						prout("by aliens and made into a flying McDonald's.");
 						damage[DSHUTTL] = -10;
-						iscraft = -1;
+						has_suttlecraft = -1;
 					}
 					else {
 						prout("Galileo, left on the planet surface, is well hidden.");
 					}
 				}
 				if (line==0) {
-					quadx = d.isx;
-					quady = d.isy;
+					quadx = g_d.qx_supercommander;
+					quady = g_d.qy_supercommander;
 				}
 				else {
-					quadx = d.cx[i];
-					quady = d.cy[i];
+					quadx = g_d.qx_commander[i];
+					quady = g_d.qy_commander[i];
 				}
 				iran10(&sectx, &secty);
 				crmshp();
@@ -181,58 +181,58 @@ void events(void) {
 					prout("(Remainder of rest/repair period cancelled.)");
 					resting = 0;
 				}
-				if (shldup==0) {
-					if (damage[DSHIELD]==0 && shield > 0) {
+				if (is_shield_up==0) {
+					if (damage[DSHIELD]==0 && ship_shield_strength > 0) {
 						sheild(2); /* Shldsup */
-						shldchg=0;
+						is_shield_changing=0;
 					}
 					else prout("(Shields not currently useable.)");
 				}
 				newqad(0);
 				/* Adjust finish time to time of tractor beaming */
-				fintim = d.date+Time;
-				if (d.remcom <= 0) future[FTBEAM] = 1e30;
-				else future[FTBEAM] = d.date+Time+expran(1.5*intime/d.remcom);
+				fintim = g_d.stardate+Time;
+				if (g_d.remaining_commanders <= 0) future[FTBEAM] = 1e30;
+				else future[FTBEAM] = g_d.stardate+Time+expran(1.5*game_initial_time/g_d.remaining_commanders);
 				break;
 			case FSNAP: /* Snapshot of the universe (for time warp) */
-				snapsht = d;
-				d.snap = 1;
-				future[FSNAP] = d.date + expran(0.5 * intime);
+				snapsht = g_d;
+				g_d.snap = 1;
+				future[FSNAP] = g_d.stardate + expran(0.5 * game_initial_time);
 				break;
 			case FBATTAK: /* Commander attacks starbase */
-				if (d.remcom==0 || d.rembase==0) {
+				if (g_d.remaining_commanders==0 || g_d.remaining_bases==0) {
 					/* no can do */
 					future[FBATTAK] = future[FCDBAS] = 1e30;
 					break;
 				}
 				i = 0;
-				for (j=1; j<=d.rembase; j++) {
-					for (k=1; k<=d.remcom; k++)
-						if (d.baseqx[j]==d.cx[k] && d.baseqy[j]==d.cy[k] &&
-							(d.baseqx[j]!=quadx || d.baseqy[j]!=quady) &&
-							(d.baseqx[j]!=d.isx || d.baseqy[j]!=d.isy)) {
+				for (j=1; j<=g_d.remaining_bases; j++) {
+					for (k=1; k<=g_d.remaining_commanders; k++)
+						if (g_d.qx_base[j]==g_d.qx_commander[k] && g_d.qy_base[j]==g_d.qy_commander[k] &&
+							(g_d.qx_base[j]!=quadx || g_d.qy_base[j]!=quady) &&
+							(g_d.qx_base[j]!=g_d.qx_supercommander || g_d.qy_base[j]!=g_d.qy_supercommander)) {
 							i = 1;
 							break;
 						}
 					if (i == 1) break;
 				}
-				if (j>d.rembase) {
+				if (j>g_d.remaining_bases) {
 					/* no match found -- try later */
-					future[FBATTAK] = d.date + expran(0.3*intime);
+					future[FBATTAK] = g_d.stardate + expran(0.3*game_initial_time);
 					future[FCDBAS] = 1e30;
 					break;
 				}
 				/* commander + starbase combination found -- launch attack */
-				batx = d.baseqx[j];
-				baty = d.baseqy[j];
-				future[FCDBAS] = d.date+1.0+3.0*Rand();
-				if (isatb) /* extra time if SC already attacking */
-					future[FCDBAS] += future[FSCDBAS]-d.date;
-				future[FBATTAK] = future[FCDBAS] +expran(0.3*intime);
-				iseenit = 0;
+				batx = g_d.qx_base[j];
+				baty = g_d.qy_base[j];
+				future[FCDBAS] = g_d.stardate+1.0+3.0*Rand();
+				if (is_supercommander_attacking_base) /* extra time if SC already attacking */
+					future[FCDBAS] += future[FSCDBAS]-g_d.stardate;
+				future[FBATTAK] = future[FCDBAS] +expran(0.3*game_initial_time);
+				has_seen_attack_report = 0;
 				if (!REPORTS)
 				     break; /* No warning :-( */
-				iseenit = 1;
+				has_seen_attack_report = 1;
 				if (ipage==0) pause(1);
 				ipage = 1;
 				skip(1);
@@ -255,20 +255,20 @@ void events(void) {
 				break;
 			case FSCDBAS: /* Supercommander destroys base */
 				future[FSCDBAS] = 1e30;
-				isatb = 2;
-				if (d.galaxy[d.isx][d.isy]%100 < 10) break; /* WAS RETURN! */
+				is_supercommander_attacking_base = 2;
+				if (g_d.galaxy[g_d.qx_supercommander][g_d.qy_supercommander]%100 < 10) break; /* WAS RETURN! */
 				ixhold = batx;
 				iyhold = baty;
-				batx = d.isx;
-				baty = d.isy;
+				batx = g_d.qx_supercommander;
+				baty = g_d.qy_supercommander;
 			case FCDBAS: /* Commander succeeds in destroying base */
 				if (line==FCDBAS) {
 					future[FCDBAS] = 1e30;
 					/* find the lucky pair */
-					for (i = 1; i <= d.remcom; i++)
-						if (d.cx[i]==batx && d.cy[i]==baty) break;
-					if (i > d.remcom || d.rembase == 0 ||
-						d.galaxy[batx][baty] % 100 < 10) {
+					for (i = 1; i <= g_d.remaining_commanders; i++)
+						if (g_d.qx_commander[i]==batx && g_d.qy_commander[i]==baty) break;
+					if (i > g_d.remaining_commanders || g_d.remaining_bases == 0 ||
+						g_d.galaxy[batx][baty] % 100 < 10) {
 						/* No action to take after all */
 						batx = baty = 0;
 						break;
@@ -280,13 +280,13 @@ void events(void) {
 				/* Handle case where base is in same quadrant as starship */
 				if (batx==quadx && baty==quady) {
 					if (starch[batx][baty] > 999) starch[batx][baty] -= 10;
-					quad[basex][basey]= IHDOT;
-					basex=basey=0;
+					quad[currentq_base_sx][currentq_base_sy]= IHDOT;
+					currentq_base_sx=currentq_base_sy=0;
 					newcnd();
 					skip(1);
 					prout("Spock-  \"Captain, I believe the starbase has been destroyed.\"");
 				}
-				else if (d.rembase != 1 && REPORTS) {
+				else if (g_d.remaining_bases != 1 && REPORTS) {
 					/* Get word via subspace radio */
 					if (ipage==0) pause(1);
 					ipage = 1;
@@ -295,44 +295,44 @@ void events(void) {
 					proutn("   the starbase in");
 					cramlc(1, batx, baty);
 					prout(" has been destroyed by");
-					if (isatb==2) prout("the Klingon Super-Commander");
+					if (is_supercommander_attacking_base==2) prout("the Klingon Super-Commander");
 					else prout("a Klingon Commander");
 				}
 				/* Remove Starbase from galaxy */
-				d.galaxy[batx][baty] -= 10;
-				for (i=1; i <= d.rembase; i++)
-					if (d.baseqx[i]==batx && d.baseqy[i]==baty) {
-						d.baseqx[i]=d.baseqx[d.rembase];
-						d.baseqy[i]=d.baseqy[d.rembase];
+				g_d.galaxy[batx][baty] -= 10;
+				for (i=1; i <= g_d.remaining_bases; i++)
+					if (g_d.qx_base[i]==batx && g_d.qy_base[i]==baty) {
+						g_d.qx_base[i]=g_d.qx_base[g_d.remaining_bases];
+						g_d.qy_base[i]=g_d.qy_base[g_d.remaining_bases];
 					}
-				d.rembase--;
-				if (isatb == 2) {
+				g_d.remaining_bases--;
+				if (is_supercommander_attacking_base == 2) {
 					/* reinstate a commander's base attack */
 					batx = ixhold;
 					baty = iyhold;
-					isatb = 0;
+					is_supercommander_attacking_base = 0;
 				}
 				else {
 					batx = baty = 0;
 				}
 				break;
 			case FSCMOVE: /* Supercommander moves */
-				future[FSCMOVE] = d.date+0.2777;
+				future[FSCMOVE] = g_d.stardate+0.2777;
 				if (ientesc+istract==0 &&
-					isatb!=1 &&
-					(iscate!=1 || justin==1)) scom(&ipage);
+					is_supercommander_attacking_base!=1 &&
+					(currentq_is_supercommander_here!=1 || justin==1)) scom(&ipage);
 				break;
 			case FDSPROB: /* Move deep space probe */
-				future[FDSPROB] = d.date + 0.01;
-				probex += probeinx;
-				probey += probeiny;
-				i = (int)(probex/10 +0.05);
-				j = (int)(probey/10 + 0.05);
-				if (probecx != i || probecy != j) {
-					probecx = i;
-					probecy = j;
+				future[FDSPROB] = g_d.stardate + 0.01;
+				probe_global_x += probe_increment_gx;
+				probe_global_y += probe_increment_gy;
+				i = (int)(probe_global_x/10 +0.05);
+				j = (int)(probe_global_y/10 + 0.05);
+				if (probe_qx != i || probe_qy != j) {
+					probe_qx = i;
+					probe_qy = j;
 					if (i < 1 || i > 8 || j < 1 || j > 8 ||
-						d.galaxy[probecx][probecy] == 1000) {
+						g_d.galaxy[probe_qx][probe_qy] == 1000) {
 						// Left galaxy or ran into supernova
 						if (REPORTS) {
 							if (ipage==0) pause(1);
@@ -353,22 +353,22 @@ void events(void) {
 						ipage = 1;
 						skip(1);
 						proutn("Lt. Uhura-  \"The deep space probe is now in ");
-						cramlc(1, probecx, probecy);
+						cramlc(1, probe_qx, probe_qy);
 						prout(".\"");
 					}
 				}
 				/* Update star chart if Radio is working or have access to
 				   radio. */
 				if (REPORTS) 
-					starch[probecx][probecy] = damage[DRADIO] > 0.0 ?
-						                    d.galaxy[probecx][probecy]+1000 : 1;
-				proben--; // One less to travel
-				if (proben == 0 && isarmed &&
-					d.galaxy[probecx][probecy] % 10 > 0) {
+					starch[probe_qx][probe_qy] = damage[DRADIO] > 0.0 ?
+						                    g_d.galaxy[probe_qx][probe_qy]+1000 : 1;
+				probe_active_sectors_remaining--; // One less to travel
+				if (probe_active_sectors_remaining == 0 && is_probe_armed &&
+					g_d.galaxy[probe_qx][probe_qy] % 10 > 0) {
 					/* lets blow the sucker! */
 					snova(1,0);
 					future[FDSPROB] = 1e30;
-					if (d.galaxy[quadx][quady] == 1000) return;
+					if (g_d.galaxy[quadx][quady] == 1000) return;
 				}
 				break;
 		}
@@ -393,7 +393,7 @@ void waiting(void) {
 	}
 	origTime = delay = aaitem;
 	if (delay <= 0.0) return;
-	if (delay >= d.remtime || nenhere != 0) {
+	if (delay >= g_d.remaining_time || currentq_num_enemies != 0) {
 		prout("Are you sure? ");
 		if (ja() == 0) return;
 	}
@@ -404,25 +404,25 @@ void waiting(void) {
 	do {
 		if (delay <= 0) resting = 0;
 		if (resting == 0) {
-			cramf(d.remtime, 0, 2);
+			cramf(g_d.remaining_time, 0, 2);
 			prout(" stardates left.");
 			return;
 		}
 		temp = Time = delay;
 
-		if (nenhere) {
+		if (currentq_num_enemies) {
 			double rtime = 1.0 + Rand();
 			if (rtime < temp) temp = rtime;
 			Time = temp;
 		}
 		if (Time < delay) attack(0);
-		if (nenhere==0) movetho();
+		if (currentq_num_enemies==0) movetho();
 		if (alldone) return;
 		events();
 		ididit = 1;
 		if (alldone) return;
 		delay -= temp;
-	} while (d.galaxy[quadx][quady] != 1000); // leave if quadrant supernovas
+	} while (g_d.galaxy[quadx][quady] != 1000); // leave if quadrant supernovas
 
 	resting = 0;
 	Time = 0;
@@ -431,7 +431,7 @@ void waiting(void) {
 void nova(int ix, int iy) {
 	static double course[] =
 		{0.0, 10.5, 12.0, 1.5, 9.0, 0.0, 3.0, 7.5, 6.0, 4.5};
-	int bot, top, top2, burst, hits[11][3], kount, icx, icy, mm, nn, j;
+	int bot, top, top2, /*burst,*/ hits[11][3], kount, icx, icy, mm, nn, j;
 	int iquad, iquad1, i, ll, newcx, newcy, ii, jj;
 	if (Rand() < 0.05) {
 		/* Wow! We've supernova'ed */
@@ -441,10 +441,10 @@ void nova(int ix, int iy) {
 
 	/* handle initial nova */
 	quad[ix][iy] = IHDOT;
-	crmena(1, IHSTAR, 2, ix, iy);
+	crmena(1, IH_STAR, 2, ix, iy);
 	prout(" novas.");
-	d.galaxy[quadx][quady] -= 1;
-	d.starkl++;
+	g_d.galaxy[quadx][quady] -= 1;
+	g_d.killed_stars++;
 	
 	/* Set up stack to recursively trigger adjacent stars */
 	bot = top = top2 = 1;
@@ -464,12 +464,12 @@ void nova(int ix, int iy) {
 				switch (iquad) {
 //					case IHDOT:	/* Empty space ends reaction
 //					case IHQUEST:
-//					case IHBLANK:
-//					case IHT:
-//					case IHWEB:
+//					case IH_BLACK_HOLE:
+//					case IH_THOLIAN:
+//					case IH_THOLIAN_WEB:
 					default:
 						break;
-					case IHSTAR: /* Affect another star */
+					case IH_STAR: /* Affect another star */
 						if (Rand() < 0.05) {
 							/* This star supernovas */
 							snova(ii,jj);
@@ -478,55 +478,55 @@ void nova(int ix, int iy) {
 						top2++;
 						hits[top2][1]=ii;
 						hits[top2][2]=jj;
-						d.galaxy[quadx][quady] -= 1;
-						d.starkl++;
-						crmena(1, IHSTAR, 2, ii, jj);
+						g_d.galaxy[quadx][quady] -= 1;
+						g_d.killed_stars++;
+						crmena(1, IH_STAR, 2, ii, jj);
 						prout(" novas.");
 						quad[ii][jj] = IHDOT;
 						break;
-					case IHP: /* Destroy planet */
-						d.newstuf[quadx][quady] -= 1;
-						d.nplankl++;
-						crmena(1, IHP, 2, ii, jj);
+					case IH_PLANET: /* Destroy planet */
+						g_d.newstuf[quadx][quady] -= 1;
+						g_d.killed_planets++;
+						crmena(1, IH_PLANET, 2, ii, jj);
 						prout(" destroyed.");
-						d.plnets[iplnet] = nulplanet;
-						iplnet = plnetx = plnety = 0;
-						if (landed == 1) {
+						g_d.plnets[currentq_planet_id] = nulplanet;
+						currentq_planet_id = currentq_planet_sx = currentq_planet_sy = 0;
+						if (is_landed == 1) {
 							finish(FPNOVA);
 							return;
 						}
 						quad[ii][jj] = IHDOT;
 						break;
-					case IHB: /* Destroy base */
-						d.galaxy[quadx][quady] -= 10;
-						for (i = 1; i <= d.rembase; i++)
-							if (d.baseqx[i]==quadx && d.baseqy[i]==quady) break;
-						d.baseqx[i] = d.baseqx[d.rembase];
-						d.baseqy[i] = d.baseqy[d.rembase];
-						d.rembase--;
-						basex = basey = 0;
-						d.basekl++;
+					case IH_BASE: /* Destroy base */
+						g_d.galaxy[quadx][quady] -= 10;
+						for (i = 1; i <= g_d.remaining_bases; i++)
+							if (g_d.qx_base[i]==quadx && g_d.qy_base[i]==quady) break;
+						g_d.qx_base[i] = g_d.qx_base[g_d.remaining_bases];
+						g_d.qy_base[i] = g_d.qy_base[g_d.remaining_bases];
+						g_d.remaining_bases--;
+						currentq_base_sx = currentq_base_sy = 0;
+						g_d.killed_bases++;
 						newcnd();
-						crmena(1, IHB, 2, ii, jj);
+						crmena(1, IH_BASE, 2, ii, jj);
 						prout(" destroyed.");
 						quad[ii][jj] = IHDOT;
 						break;
-					case IHE: /* Buffet ship */
-					case IHF:
+					case IH_ENTERPRISE: /* Buffet ship */
+					case IH_FAERIE_QUEEN:
 						prout("***Starship buffeted by nova.");
-						if (shldup) {
-							if (shield >= 2000.0) shield -= 2000.0;
+						if (is_shield_up) {
+							if (ship_shield_strength >= 2000.0) ship_shield_strength -= 2000.0;
 							else {
-								double diff = 2000.0 - shield;
-								energy -= diff;
-								shield = 0.0;
-								shldup = 0;
+								double diff = 2000.0 - ship_shield_strength;
+								ship_energy -= diff;
+								ship_shield_strength = 0.0;
+								is_shield_up = 0;
 								prout("***Shields knocked out.");
-								damage[DSHIELD] += 0.005*damfac*Rand()*diff;
+								damage[DSHIELD] += 0.005*game_damage_factor*Rand()*diff;
 							}
 						}
-						else energy -= 2000.0;
-						if (energy <= 0) {
+						else ship_energy -= 2000.0;
+						if (ship_energy <= 0) {
 							finish(FNOVA);
 							return;
 						}
@@ -535,13 +535,13 @@ void nova(int ix, int iy) {
 						icy += secty-hits[mm][2];
 						kount++;
 						break;
-					case IHK: /* kill klingon */
+					case IH_KLINGON: /* kill klingon */
 						deadkl(ii,jj,iquad, ii, jj);
 						break;
-					case IHC: /* Damage/destroy big enemies */
-					case IHS:
-					case IHR:
-						for (ll = 1; ll <= nenhere; ll++)
+					case IH_COMMANDER: /* Damage/destroy big enemies */
+					case IH_SUPER_COMMANDER:
+					case IH_ROMULAN:
+						for (ll = 1; ll <= currentq_num_enemies; ll++)
 							if (kx[ll]==ii && ky[ll]==jj) break;
 						kpower[ll] -= 800.0; /* If firepower is lost, die */
 						if (kpower[ll] <= 0.0) {
@@ -558,9 +558,9 @@ void nova(int ix, int iy) {
 							break;
 						}
 						iquad1 = quad[newcx][newcy];
-						if (iquad1 == IHBLANK) {
+						if (iquad1 == IH_BLACK_HOLE) {
 							proutn(", blasted into ");
-							crmena(0, IHBLANK, 2, newcx, newcy);
+							crmena(0, IH_BLACK_HOLE, 2, newcx, newcy);
 							skip(1);
 							deadkl(ii, jj, iquad, newcx, newcy);
 							break;
@@ -616,8 +616,8 @@ void snova(int insx, int insy) {
 	if (insy== 0) {
 		if (insx == 1) {
 			/* NOVAMAX being used */
-			nqx = probecx;
-			nqy = probecy;
+			nqx = probe_qx;
+			nqy = probe_qy;
 		}
 		else {
 			int stars = 0;
@@ -626,14 +626,14 @@ void snova(int insx, int insy) {
 			left of universe */
 			for (nqx = 1; nqx<=8; nqx++) {
 				for (nqy = 1; nqy<=8; nqy++) {
-					stars += d.galaxy[nqx][nqy] % 10;
+					stars += g_d.galaxy[nqx][nqy] % 10;
 				}
 			}
 			if (stars == 0) return; /* nothing to supernova exists */
-			num = Rand()*stars + 1;
+			num = (int)(Rand()*stars + 1);
 			for (nqx = 1; nqx<=8; nqx++) {
 				for (nqy = 1; nqy<=8; nqy++) {
-					num -= d.galaxy[nqx][nqy] % 10;
+					num -= g_d.galaxy[nqx][nqy] % 10;
 					if (num <= 0) break;
 				}
 				if (num <=0) break;
@@ -654,7 +654,7 @@ void snova(int insx, int insy) {
 			if (REPORTS) {
 				skip(1);
 				proutn("Message from Starfleet Command       Stardate ");
-				cramf(d.date, 0, 1);
+				cramf(g_d.stardate, 0, 1);
 				skip(1);
 				proutn("     Supernova in");
 				cramlc(1, nqx, nqy);
@@ -664,10 +664,10 @@ void snova(int insx, int insy) {
 		else {
 			/* we are in the quadrant! */
 			insipient = 1;
-			num = Rand()* (d.galaxy[nqx][nqy]%10) + 1;
+			num = (int)(Rand()* (g_d.galaxy[nqx][nqy]%10) + 1);
 			for (nsx=1; nsx < 10; nsx++) {
 				for (nsy=1; nsy < 10; nsy++) {
-					if (quad[nsx][nsy]==IHSTAR) {
+					if (quad[nsx][nsy]==IH_STAR) {
 						num--;
 						if (num==0) break;
 					}
@@ -698,75 +698,75 @@ void snova(int insx, int insy) {
 		}
 	}
 	/* destroy any Klingons in supernovaed quadrant */
-	num=d.galaxy[nqx][nqy];
+	num=g_d.galaxy[nqx][nqy];
     kldead = num/100;
-    d.remkl -= kldead; // Moved here to correctly set remaining Klingon count
+    g_d.remaining_klingons -= kldead; // Moved here to correctly set remaining Klingon count
 	comdead = iscdead = 0;
-	if (nqx==d.isx && nqy == d.isy) {
+	if (nqx==g_d.qx_supercommander && nqy == g_d.qy_supercommander) {
 		/* did in the Supercommander! */
-		d.nscrem = d.isx = d.isy = isatb = iscate = 0;
+		g_d.remaining_supercommanders = g_d.qx_supercommander = g_d.qy_supercommander = is_supercommander_attacking_base = currentq_is_supercommander_here = 0;
 		iscdead = 1;
 		kldead--; /* Get proper kill credit */
 		future[FSCMOVE] = future[FSCDBAS] = 1e30;
 	}
 
-    if (d.remcom) {
-		int maxloop = d.remcom, l;
+    if (g_d.remaining_commanders) {
+		int maxloop = g_d.remaining_commanders, l;
 		for (l = 1; l <= maxloop; l++) {
-			if (d.cx[l] == nqx && d.cy[l] == nqy) {
-				d.cx[l] = d.cx[d.remcom];
-				d.cy[l] = d.cy[d.remcom];
-				d.cx[d.remcom] = d.cy[d.remcom] = 0;
-				d.remcom--;
+			if (g_d.qx_commander[l] == nqx && g_d.qy_commander[l] == nqy) {
+				g_d.qx_commander[l] = g_d.qx_commander[g_d.remaining_commanders];
+				g_d.qy_commander[l] = g_d.qy_commander[g_d.remaining_commanders];
+				g_d.qx_commander[g_d.remaining_commanders] = g_d.qy_commander[g_d.remaining_commanders] = 0;
+				g_d.remaining_commanders--;
 				kldead--;
 				comdead++;
-				if (d.remcom==0) future[FTBEAM] = 1e30;
+				if (g_d.remaining_commanders==0) future[FTBEAM] = 1e30;
 				break;
 			}
 		}
 	}
 	/* destroy Romulans and planets in supernovaed quadrant */
-	num = d.newstuf[nqx][nqy];
-	d.newstuf[nqx][nqy] = 0;
+	num = g_d.newstuf[nqx][nqy];
+	g_d.newstuf[nqx][nqy] = 0;
 	nrmdead = num/10;
-	d.nromrem -= nrmdead;
+	g_d.remaining_romulans -= nrmdead;
 	npdead = num - nrmdead*10;
 	if (npdead) {
 		int l;
 		for (l = 1; l <= inplan; l++)
-			if (d.plnets[l].x == nqx && d.plnets[l].y == nqy) {
-				d.plnets[l] = nulplanet;
+			if (g_d.plnets[l].qx == nqx && g_d.plnets[l].qy == nqy) {
+				g_d.plnets[l] = nulplanet;
 			}
 	}
 	/* Destroy any base in supernovaed quadrant */
-	if (d.rembase) {
-		int maxloop = d.rembase, l;
+	if (g_d.remaining_bases) {
+		int maxloop = g_d.remaining_bases, l;
 		for (l = 1; l <= maxloop; l++)
-			if (d.baseqx[l]==nqx && d.baseqy[l]==nqy) {
-				d.baseqx[l] = d.baseqx[d.rembase];
-				d.baseqy[l] = d.baseqy[d.rembase];
-				d.baseqx[d.rembase] = d.baseqy[d.rembase] = 0;
-				d.rembase--;
+			if (g_d.qx_base[l]==nqx && g_d.qy_base[l]==nqy) {
+				g_d.qx_base[l] = g_d.qx_base[g_d.remaining_bases];
+				g_d.qy_base[l] = g_d.qy_base[g_d.remaining_bases];
+				g_d.qx_base[g_d.remaining_bases] = g_d.qy_base[g_d.remaining_bases] = 0;
+				g_d.remaining_bases--;
 				break;
 			}
 	}
 	/* If starship caused supernova, tally up destruction */
 	if (insx) {
-		num = d.galaxy[nqx][nqy] % 100;
-		d.starkl += num % 10;
-		d.basekl += num/10;
-		d.killk += kldead;
-		d.killc += comdead;
-		d.nromkl += nrmdead;
-		d.nplankl += npdead;
-		d.nsckill += iscdead;
+		num = g_d.galaxy[nqx][nqy] % 100;
+		g_d.killed_stars += num % 10;
+		g_d.killed_bases += num/10;
+		g_d.killed_klingons += kldead;
+		g_d.killed_commanders += comdead;
+		g_d.killed_romulans += nrmdead;
+		g_d.killed_planets += npdead;
+		g_d.killed_supercommanders += iscdead;
 	}
 	/* mark supernova in galaxy and in star chart */
 	if ((quadx == nqx && quady == nqy) || REPORTS)
 		starch[nqx][nqy] = 1;
-	d.galaxy[nqx][nqy] = 1000;
+	g_d.galaxy[nqx][nqy] = 1000;
 	/* If supernova destroys last klingons give special message */
-	if (d.remkl==0 && (nqx != quadx || nqy != quady)) {
+	if (g_d.remaining_klingons==0 && (nqx != quadx || nqy != quady)) {
 		skip(2);
 		if (insx == 0) prout("Lucky you!");
 		proutn("A supernova in");

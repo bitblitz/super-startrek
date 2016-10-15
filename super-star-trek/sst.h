@@ -1,3 +1,7 @@
+#ifdef WINDOWS
+#pragma warning(disable: 4244)
+#endif
+
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
@@ -20,13 +24,13 @@
 #else
 #define ndevice (15)	// Number of devices
 #endif
-#define phasefac (2.0)
+#define PHASER_DAMAGE_FACTOR (2.0)
 #define PLNETMAX (10)
 #define NEVENTS (8)
 
 typedef struct {
-	int x;	/* Quadrant location of planet */
-	int y;
+	int qx;	/* Quadrant location of planet */
+	int qy;
 	int pclass; /* class M, N, or O (1, 2, or 3) */
 	int crystals; /* has crystals */
 	int known;   /* =1 contents known, =2 shuttle on this planet */
@@ -34,32 +38,32 @@ typedef struct {
 
 EXTERN struct foo {
 		int snap,		// snapshot taken
-		remkl,			// remaining klingons
-	        remcom,			// remaining commanders
-		rembase,		// remaining bases
-		starkl,			// destroyed stars
-		basekl,			// destroyed bases
-		killk,			// Klingons killed
-		killc,			// commanders killed
+		remaining_klingons,			// remaining klingons
+	    remaining_commanders,			// remaining commanders
+		remaining_bases,		// remaining bases
+		killed_stars,			// destroyed stars
+		killed_bases,			// destroyed bases
+		killed_klingons,			// Klingons killed
+		killed_commanders,			// commanders killed
 		galaxy[9][9], 	// The Galaxy (subscript 0 not used)
-		cx[11],cy[11],	// Commander quadrant coordinates
-		baseqx[6],		// Base quadrant X
-		baseqy[6],		// Base quadrant Y
+		qx_commander[11],qy_commander[11],	// Commander quadrant coordinates
+		qx_base[6],		// Base quadrant X
+		qy_base[6],		// Base quadrant Y
 		newstuf[9][9],	// Extended galaxy goodies
-		isx, isy,		// Coordinate of Super Commander
-		nscrem,			// remaining super commanders
-		nromkl,			// Romulans killed
-		nromrem,		// Romulans remaining
-		nsckill,		// super commanders killed
-		nplankl;		// destroyed planets
-	PLANETS plnets[PLNETMAX+1];  // Planet information
+		qx_supercommander, qy_supercommander,		// Coordinate of Super Commander
+		remaining_supercommanders,			// remaining super commanders
+		killed_romulans,			// Romulans killed
+		remaining_romulans,		// Romulans remaining
+		killed_supercommanders,		// super commanders killed
+		killed_planets;		// destroyed planets
+	    PLANETS plnets[PLNETMAX+1];  // Planet information
 #ifdef CAPTURE
-    int kcaptured, brigfree;
+        int captured_klingons, brigfree;
 #endif
-	double date,		// stardate
-		remres,			// remaining resources
-	    remtime;		// remaining time
-} d, snapsht;			// Data that is snapshot
+	double stardate,		// stardate
+		remaining_resources,			// remaining resources
+	    remaining_time;		// remaining time
+} g_d, snapsht;			// Data that is snapshot
 
 EXTERN char
 		quad[11][11];	// contents of our quadrant
@@ -70,203 +74,204 @@ EXTERN char
 // but I just didn't think of it back when I started.
 
 EXTERN struct foo2 {
-	int inkling,
-	inbase,
-	incom,
-	instar,
+	int initial_klingons,
+	initial_bases,
+	initial_commanders,
+	initial_stars,
 	intorps,
-	condit,
+	ship_condition,
 	torps,
-	ship,
+	ship_name,
 	quadx,
 	quady,
 	sectx,
 	secty,
-	length,
-	skill,
-	basex,
-	basey,
-	klhere,
-	comhere,
-	casual,
-	nhelp,
-	nkinks,
+	game_length,
+	game_skill,
+	currentq_base_sx,
+	currentq_base_sy,
+	currentq_num_klingons,
+	currentq_num_commanders,
+	num_casualties,
+	game_num_help_calls,
+	game_num_intergalactic_attempts,
 	ididit,
 	gamewon,
 	alive,
 	justin,
 	alldone,
-	shldchg,
-	thingx,
-	thingy,
-	plnetx,
-	plnety,
-	inorbit,
-	landed,
-	iplnet,
-	imine,
+	is_shield_changing,
+	qx_thing,
+	qy_thing,
+	currentq_planet_sx,
+	currentq_planet_sy,
+	is_inorbit,
+	is_landed,
+	currentq_planet_id,
+	is_mining,
 	inplan,
-	nenhere,
-	ishere,
-	neutz,
-	irhere,
-	icraft,
+	currentq_num_enemies,
+	currentq_has_supercommander,
+	in_neutral_zone,
+	currentq_num_romulans,
+	is_aboard_shuttle,
 	ientesc,
-	iscraft,
-	isatb,
-	iscate,
+	has_suttlecraft,
+	is_supercommander_attacking_base,
+	currentq_is_supercommander_here,
 #ifdef DEBUG
 	idebug,
 #endif
 #ifdef CLOAKING
     iscloaked,
     iscloaking,
-    ncviol,
-    isviolreported,
+    num_cloak_violations,
+    is_cloak_violation_reported,
 #endif
 #ifdef CAPTURE
     brigcapacity,
 #endif
 	iattak,
-	icrystl,
-	tourn,
+	have_crystals,
+	is_tournament_game,
 	thawed,
 	batx,
 	baty,
-	ithere,
-	ithx,
-	ithy,
-	iseenit,
-	probecx,
-	probecy,
-	proben,
-	isarmed,
-	nprobes;
+	currentq_has_tholian,
+	currentq_tholian_sx,
+	currentq_tholian_sy,
+	has_seen_attack_report,
+	probe_qx,
+	probe_qy,
+	probe_active_sectors_remaining,
+	is_probe_armed,
+	remaining_probes;
 
-	double inresor,
-	intime,
-	inenrg,
-	inshld,
-	inlsr,
-	indate,
-	energy,
-	shield,
-	shldup,
-	warpfac,
-	wfacsq,
-	lsupres,
+	double game_initial_resources,
+	game_initial_time,
+	ship_max_energy,
+	ship_max_shield,
+	game_initial_lifesupport,
+	game_initial_stardate,
+	ship_energy,
+	ship_shield_strength,
+	is_shield_up,
+	warp_factor,
+	warp_factor_squared,
+	ship_life_support_reserves,
 	dist,
 	direc,
 	Time,
 	docfac,
 	resting,
-	damfac,
-	stdamtim,
-	cryprob,
-	probex,
-	probey,
-	probeinx,
-	probeiny;
-} a;
+	game_damage_factor,
+	ship_date_chart_damaged,
+	crystal_prob_fail,
+    probe_global_x,
+	probe_global_y,
+	probe_increment_gx,
+	probe_increment_gy;
+} g_a;
 
-#define inkling a.inkling		// Initial number of klingons
-#define inbase a.inbase			// Initial number of bases
-#define incom a.incom			// Initian number of commanders
-#define instar a.instar			// Initial stars
-#define intorps a.intorps		// Initial/Max torpedoes
-#define condit a.condit			// Condition (red, yellow, green docked)
-#define torps a.torps			// number of torpedoes
-#define ship a.ship				// Ship type -- 'E' is Enterprise
-#define quadx a.quadx			// where we are
-#define quady a.quady			//
-#define sectx a.sectx			// where we are
-#define secty a.secty			//
-#define length a.length			// length of game
-#define skill a.skill			// skill level
-#define basex a.basex			// position of base in current quad
-#define basey a.basey			//
-#define klhere a.klhere			// klingons here
-#define comhere a.comhere		// commanders here
-#define casual a.casual			// causalties
-#define nhelp a.nhelp			// calls for help
-#define nkinks a.nkinks			//
-#define ididit a.ididit			// Action taken -- allows enemy to attack
-#define gamewon a.gamewon		// Finished!
-#define alive a.alive			// We are alive (not killed)
-#define justin a.justin			// just entered quadrant
-#define alldone a.alldone		// game is now finished
-#define shldchg a.shldchg		// shield is changing (affects efficiency)
-#define thingx a.thingx			// location of strange object in galaxy
-#define thingy a.thingy			//
-#define plnetx a.plnetx			// location of planet in quadrant
-#define plnety a.plnety			//
-#define inorbit a.inorbit		// orbiting
-#define landed a.landed			// party on planet (1), on ship (-1)
-#define iplnet a.iplnet			// planet # in quadrant
-#define imine a.imine			// mining
-#define inplan a.inplan			// initial planets
-#define nenhere a.nenhere		// Number of enemies in quadrant
-#define ishere a.ishere			// Super-commander in quandrant
-#define neutz a.neutz			// Romulan Neutral Zone
-#define irhere a.irhere			// Romulans in quadrant
-#define icraft a.icraft			// Kirk in Galileo
-#define ientesc a.ientesc		// Attempted escape from supercommander
-#define iscraft a.iscraft		// =1 if craft on ship, -1 if removed from game
-#define isatb a.isatb			// =1 if SuperCommander is attacking base
-#define iscate a.iscate			// Super Commander is here
+#define initial_klingons g_a.initial_klingons		// Initial number of klingons
+#define initial_bases g_a.initial_bases			// Initial number of bases
+#define initial_commanders g_a.initial_commanders			// Initian number of commanders
+#define initial_stars g_a.initial_stars			// Initial stars
+#define intorps g_a.intorps		// Initial/Max torpedoes
+#define ship_condition g_a.ship_condition			// Condition (red, yellow, green docked)
+#define torps g_a.torps			// number of torpedoes
+#define ship_name g_a.ship_name				// ship type -- 'E' is Enterprise
+#define quadx g_a.quadx			// where we are
+#define quady g_a.quady			//
+#define sectx g_a.sectx			// where we are
+#define secty g_a.secty			//
+#define game_length g_a.game_length			// length of game
+#define game_skill g_a.game_skill			// skill level
+#define currentq_base_sx g_a.currentq_base_sx			// position of base in current quad
+#define currentq_base_sy g_a.currentq_base_sy			//
+#define currentq_num_klingons g_a.currentq_num_klingons			// klingons here
+#define currentq_num_commanders g_a.currentq_num_commanders		// commanders here
+#define num_casualties g_a.num_casualties			// causalties
+#define game_num_help_calls g_a.game_num_help_calls			// calls for help
+#define game_num_intergalactic_attempts g_a.game_num_intergalactic_attempts			//
+#define ididit g_a.ididit			// Action taken -- allows enemy to attack
+#define gamewon g_a.gamewon		// Finished!
+#define alive g_a.alive			// We are alive (not killed)
+#define justin g_a.justin			// just entered quadrant
+#define alldone g_a.alldone		// game is now finished
+#define is_shield_changing g_a.is_shield_changing		// shield is changing (affects efficiency)
+#define qx_thing g_a.qx_thing			// location of strange object in galaxy
+#define qy_thing g_a.qy_thing			//
+#define currentq_planet_sx g_a.currentq_planet_sx			// location of planet in quadrant
+#define currentq_planet_sy g_a.currentq_planet_sy			//
+#define is_inorbit g_a.is_inorbit		// orbiting
+#define is_landed g_a.is_landed			// party on planet (1), on ship (-1)
+#define currentq_planet_id g_a.currentq_planet_id			// planet # in quadrant
+#define is_mining g_a.is_mining			// mining
+#define inplan g_a.inplan			// initial planets
+#define currentq_num_enemies g_a.currentq_num_enemies		// Number of enemies in quadrant
+#define currentq_has_supercommander g_a.currentq_has_supercommander			// Super-commander in quandrant
+#define in_neutral_zone g_a.in_neutral_zone			// Romulan Neutral Zone
+#define currentq_num_romulans g_a.currentq_num_romulans			// Romulans in quadrant
+#define is_aboard_shuttle g_a.is_aboard_shuttle			// Kirk in Galileo
+#define ientesc g_a.ientesc		// Attempted escape from supercommander
+#define has_suttlecraft g_a.has_suttlecraft		// =1 if craft on ship, -1 if removed from game
+#define is_supercommander_attacking_base g_a.is_supercommander_attacking_base			// =1 if SuperCommander is attacking base
+#define currentq_is_supercommander_here g_a.currentq_is_supercommander_here			// Super Commander is here
 #ifdef DEBUG
-#define idebug a.idebug			// Debug mode
+#define idebug g_a.idebug			// Debug mode
 #endif
 #ifdef CLOAKING
-#define iscloaked a.iscloaked  // Cloaking is enabled
-#define iscloaking a.iscloaking // However if iscloaking is TRUE then in process of cloaking and can be attacked
-#define ncviol a.ncviol		// Treaty violations
-#define isviolreported a.isviolreported // Violation reported by Romulan in quadrant
+#define iscloaked g_a.iscloaked  // Cloaking is enabled
+#define iscloaking g_a.iscloaking // However if iscloaking is TRUE then in process of cloaking and can be attacked
+#define num_cloak_violations g_a.num_cloak_violations		// Treaty violations
+#define is_cloak_violation_reported g_a.is_cloak_violation_reported // Violation reported by Romulan in quadrant
 #endif
 #ifdef CAPTURE
-#define kcaptured d.kcaptured   // number of captured Klingons                  
-#define brigfree d.brigfree     // room in the brig
-#define brigcapacity a.brigcapacity        // How many Klingons the brig will hold
+#define captured_klingons g_d.captured_klingons   // number of captured Klingons                  
+#define brigfree g_d.brigfree     // room in the brig
+#define brigcapacity g_a.brigcapacity        // How many Klingons the brig will hold
 #endif
-#define iattak a.iattak			// attack recursion elimination (was cracks[4])
-#define icrystl a.icrystl		// dilithium crystals aboard
-#define tourn a.tourn			// Tournament number
-#define thawed a.thawed			// Thawed game
-#define batx a.batx				// Base coordinates being attacked
-#define baty a.baty				//
-#define ithere a.ithere			// Tholean is here 
-#define ithx a.ithx				// coordinates of tholean
-#define ithy a.ithy
-#define iseenit a.iseenit		// Seen base attack report
-#define inresor a.inresor		// initial resources
-#define intime a.intime			// initial time
-#define inenrg a.inenrg			// Initial/Max Energy
-#define inshld a.inshld			// Initial/Max Shield
-#define inlsr a.inlsr			// initial life support resources
-#define indate a.indate			// Initial date
-#define energy a.energy			// Energy level
-#define shield a.shield			// Shield level
-#define shldup a.shldup			// Shields are up
-#define warpfac a.warpfac		// Warp speed
-#define wfacsq a.wfacsq			// squared warp factor
-#define lsupres a.lsupres		// life support reserves
-#define dist a.dist				// movement distance
-#define direc a.direc			// movement direction
-#define Time a.Time				// time taken by current operation
-#define docfac a.docfac			// repair factor when docking (constant?)
-#define resting a.resting		// rest time
-#define damfac a.damfac			// damage factor
-#define stdamtim a.stdamtim		// time that star chart was damaged
-#define cryprob a.cryprob		// probability that crystal will work
-#define probex a.probex			// location of probe
-#define probey a.probey
-#define probecx a.probecx		// current probe quadrant
-#define probecy a.probecy	
-#define probeinx a.probeinx		// Probe x,y increment
-#define probeiny a.probeiny		
-#define proben a.proben			// number of moves for probe
-#define isarmed a.isarmed		// Probe is armed
-#define nprobes a.nprobes		// number of probes available
+#define iattak g_a.iattak			// attack recursion elimination (was cracks[4])
+#define have_crystals g_a.have_crystals		// dilithium crystals aboard
+#define is_tournament_game g_a.is_tournament_game			// Tournament number
+#define thawed g_a.thawed			// Thawed game
+#define batx g_a.batx				// Base coordinates being attacked
+#define baty g_a.baty				//
+#define currentq_has_tholian g_a.currentq_has_tholian			// Tholean is here 
+#define currentq_tholian_sx g_a.currentq_tholian_sx				// coordinates of tholean
+#define currentq_tholian_sy g_a.currentq_tholian_sy
+#define has_seen_attack_report g_a.has_seen_attack_report		// Seen base attack report
+#define game_initial_resources g_a.game_initial_resources		// initial resources
+#define game_initial_time g_a.game_initial_time			// initial time
+#define ship_max_energy g_a.ship_max_energy			// Initial/Max ship_energy
+#define ship_max_shield g_a.ship_max_shield			// Initial/Max Shield
+#define game_initial_lifesupport g_a.game_initial_lifesupport			// initial life support resources
+#define game_initial_stardate g_a.game_initial_stardate			// Initial stardate
+#define ship_energy g_a.ship_energy			// ship_energy level
+#define ship_shield_strength g_a.ship_shield_strength			// Shield level
+#define is_shield_up g_a.is_shield_up			// Shields are up
+#define warp_factor g_a.warp_factor		// Warp speed
+#define warp_factor_squared g_a.warp_factor_squared			// squared warp factor
+#define ship_life_support_reserves g_a.ship_life_support_reserves		// life support reserves
+#define dist g_a.dist				// movement distance
+#define direc g_a.direc			// movement direction
+#define Time g_a.Time				// time taken by current operation
+#define docfac g_a.docfac			// repair factor when docking (constant?)
+#define resting g_a.resting		// rest time
+#define game_damage_factor g_a.game_damage_factor			// damage factor
+#define ship_date_chart_damaged g_a.ship_date_chart_damaged		// time that star chart was damaged
+#define crystal_prob_fail g_a.crystal_prob_fail		// probability that crystal will fail
+#define probe_global_x g_a.probe_global_x			// location of probe
+#define probe_global_y g_a.probe_global_y
+#define probe_qx g_a.probe_qx		// current probe quadrant
+#define probe_qy g_a.probe_qy	
+#define probe_increment_gx g_a.probe_increment_gx		// Probe x,y increment
+#define probe_increment_gy g_a.probe_increment_gy		
+#define probe_active_sectors_remaining g_a.probe_active_sectors_remaining			// number of moves for probe
+#define is_probe_armed g_a.is_probe_armed		// Probe is armed
+#define remaining_probes g_a.remaining_probes		// number of probes available
+
 
 EXTERN int
 		kx[21],			// enemy sector locations
@@ -363,7 +368,7 @@ char *device[ndevice+1] = {
 };									
 #endif
 
-#define ALGERON (2311) /* Date of the Treaty of Algeron */
+#define ALGERON (2311) /* stardate of the Treaty of Algeron */
 
 #ifndef TRUE
 #define TRUE (1)
@@ -372,20 +377,20 @@ char *device[ndevice+1] = {
 #define FALSE (0)
 #endif
 
-#define IHR 'R'
-#define IHK 'K'
-#define IHC 'C'
-#define IHS 'S'
-#define IHSTAR '*'
-#define IHP 'P'
-#define IHB 'B'
-#define IHBLANK ' '
+#define IH_ROMULAN 'R'
+#define IH_KLINGON 'K'
+#define IH_COMMANDER 'C'
+#define IH_SUPER_COMMANDER 'S'
+#define IH_STAR '*'
+#define IH_PLANET 'P'
+#define IH_BASE 'B'
+#define IH_BLACK_HOLE '@'
 #define IHDOT '.'
 #define IHQUEST '?'
-#define IHE 'E'
-#define IHF 'F'
-#define IHT 'T'
-#define IHWEB '#'
+#define IH_ENTERPRISE 'E'
+#define IH_FAERIE_QUEEN 'F'
+#define IH_THOLIAN 'T'
+#define IH_THOLIAN_WEB '#'
 #define IHGREEN 'G'
 #define IHYELLOW 'Y'
 #define IHRED 'R'
@@ -490,7 +495,7 @@ void capture(void);
 #endif
 
 #ifdef CLOAKING
-#define REPORTS ((condit==IHDOCKED || damage[DRADIO]<=0.0) && !iscloaked)
+#define REPORTS ((ship_condition==IHDOCKED || damage[DRADIO]<=0.0) && !iscloaked)
 #else
-#define REPORTS (condit==IHDOCKED || damage[DRADIO]<=0.0)
+#define REPORTS (ship_condition==IHDOCKED || damage[DRADIO]<=0.0)
 #endif

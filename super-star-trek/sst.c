@@ -183,7 +183,7 @@ static void helpme(void) {
 
 static void makemoves(void) {
 	int i, hitme;
-	char ch;
+//	char ch;
 	while (TRUE) { /* command loop */
 		hitme = FALSE;
 		justin = 0;
@@ -215,7 +215,7 @@ static void makemoves(void) {
 #endif
 			   ) break;
 
-			if (skill <= SFAIR)  {
+			if (game_skill <= SFAIR)  {
 				prout("UNRECOGNIZED COMMAND. LEGAL COMMANDS ARE:");
 				listCommands(TRUE);
 			}
@@ -232,10 +232,10 @@ static void makemoves(void) {
 				phasers();
                 if (ididit) {
 #ifdef CLOAKING
-                    if (irhere && d.date >= ALGERON && !isviolreported && iscloaked) {
+                    if (currentq_num_romulans && g_d.stardate >= ALGERON && !is_cloak_violation_reported && iscloaked) {
                         prout("The Romulan ship discovers you are breaking the Treaty of Algeron!");
-                        ncviol++;
-                        isviolreported = TRUE;
+                        num_cloak_violations++;
+                        is_cloak_violation_reported = TRUE;
                     }
 #endif
                     hitme = TRUE;
@@ -245,10 +245,10 @@ static void makemoves(void) {
 				photon();
                 if (ididit) {
 #ifdef CLOAKING
-                    if (irhere && d.date >= ALGERON && !isviolreported && iscloaked) {
+                    if (currentq_num_romulans && g_d.stardate >= ALGERON && !is_cloak_violation_reported && iscloaked) {
                         prout("The Romulan ship discovers you are breaking the Treaty of Algeron!");
-                        ncviol++;
-                        isviolreported = TRUE;
+                        num_cloak_violations++;
+                        is_cloak_violation_reported = TRUE;
                     }
 #endif
                     hitme = TRUE;
@@ -261,7 +261,7 @@ static void makemoves(void) {
 				sheild(1);
 				if (ididit) {
 					attack(2);
-					shldchg = 0;
+					is_shield_changing = 0;
 				}
 				break;
 			case 6:			// dock
@@ -351,7 +351,7 @@ static void makemoves(void) {
 				score(1);    // get the score
 				break;
 #endif
-			case 29:			// Abandon Ship
+			case 29:			// Abandon ship
 				abandn();
 				break;
 			case 30:			// Self Destruct
@@ -359,7 +359,7 @@ static void makemoves(void) {
 				break;
 			case 31:			// Save Game
 				freeze(FALSE);
-				if (skill > SGOOD)
+				if (game_skill > SGOOD)
 					prout("WARNING--Frozen games produce no plaques!");
 				break;
 			case 32:			// Try a desparation measure
@@ -393,15 +393,15 @@ static void makemoves(void) {
 				events();
 				if (alldone) break;		// Events did us in
 			}
-			if (d.galaxy[quadx][quady] == 1000) { // Galaxy went Nova!
+			if (g_d.galaxy[quadx][quady] == 1000) { // Galaxy went Nova!
 				atover(0);
 				continue;
 			}
-			if (nenhere == 0) movetho();
+			if (currentq_num_enemies == 0) movetho();
 			if (hitme && justin==0) {
 				attack(2);
 				if (alldone) break;
-				if (d.galaxy[quadx][quady] == 1000) {	// went NOVA! 
+				if (g_d.galaxy[quadx][quady] == 1000) {	// went NOVA! 
 					atover(0);
 					hitme = TRUE;
 					continue;
@@ -415,9 +415,9 @@ static void makemoves(void) {
 
 
 int main(int argc, char **argv) {
-	int i;
-	int hitme;
-	char ch;
+//	int i;
+//	int hitme;
+//	char ch;
 	prelim();
 
 	if (argc > 1) { // look for -f option
@@ -451,7 +451,7 @@ int main(int argc, char **argv) {
 		stars();
 		skip(1);
 
-		if (tourn && alldone) {
+		if (is_tournament_game && alldone) {
 			printf("Do you want your score recorded?");
 			if (ja()) {
 				chew2();
@@ -472,16 +472,16 @@ void cramen(int i) {
 	char *s;
 	
 	switch (i) {
-		case IHR: s = "Romulan"; break;
-		case IHK: s = "Klingon"; break;
-		case IHC: s = "Commander"; break;
-		case IHS: s = "Super-commander"; break;
-		case IHSTAR: s = "Star"; break;
-		case IHP: s = "Planet"; break;
-		case IHB: s = "Starbase"; break;
-		case IHBLANK: s = "Black hole"; break;
-		case IHT: s = "Tholean"; break;
-		case IHWEB: s = "Tholean web"; break;
+		case IH_ROMULAN: s = "Romulan"; break;
+		case IH_KLINGON: s = "Klingon"; break;
+		case IH_COMMANDER: s = "Commander"; break;
+		case IH_SUPER_COMMANDER: s = "Super-commander"; break;
+		case IH_STAR: s = "Star"; break;
+		case IH_PLANET: s = "Planet"; break;
+		case IH_BASE: s = "Starbase"; break;
+		case IH_BLACK_HOLE: s = "Black hole"; break;
+		case IH_THOLIAN: s = "Tholean"; break;
+		case IH_THOLIAN_WEB: s = "Tholean web"; break;
 		default: s = "Unknown??"; break;
 	}
 	proutn(s);
@@ -505,10 +505,10 @@ void crmena(int i, int enemy, int key, int x, int y) {
 
 void crmshp(void) {
 	char *s;
-	switch (ship) {
-		case IHE: s = "Enterprise"; break;
-		case IHF: s = "Faerie Queene"; break;
-		default:  s = "Ship???"; break;
+	switch (ship_name) {
+		case IH_ENTERPRISE: s = "Enterprise"; break;
+		case IH_FAERIE_QUEEN: s = "Faerie Queene"; break;
+		default:  s = "ship???"; break;
 	}
 	proutn(s);
 }
@@ -519,11 +519,15 @@ void stars(void) {
 }
 
 double expran(double avrage) {
-	return -avrage*log(1e-7 + Rand());
+	double d = -avrage*log(1e-7 + Rand());
+    printf("exprand = %g ", d);
+    return d;
 }
 
 double Rand(void) {
-	return rand()/(1.0 + (double)RAND_MAX);
+    double d= rand()/(1.0 + (double)RAND_MAX);
+//#printf("rand = %g ", d);
+    return d;
 }
 
 void iran8(int *i, int *j) {
@@ -640,14 +644,14 @@ void pause(int i) {
 #endif
 	putchar('\n');
 	if (i==1) {
-		if (skill > SFAIR)
+		if (game_skill > SFAIR)
 			prout("[ANNOUNCEMENT ARRIVING...]");
 		else
 			prout("[IMPORTANT ANNOUNCEMENT ARRIVING -- HIT SPACE BAR TO CONTINUE]");
 		getch();
 	}
 	else {
-		if (skill > SFAIR)
+		if (game_skill > SFAIR)
 			proutn("[CONTINUE?]");
 		else
 			proutn("[HIT SPACE BAR TO CONTINUE]");
@@ -710,16 +714,16 @@ int isit(char *s) {
 void debugme(void) {
 	proutn("Reset levels? ");
 	if (ja() != 0) {
-		if (energy < inenrg) energy = inenrg;
-		shield = inshld;
+		if (ship_energy < ship_max_energy) ship_energy = ship_max_energy;
+		ship_shield_strength = ship_max_shield;
 		torps = intorps;
-		lsupres = inlsr;
+		ship_life_support_reserves = game_initial_lifesupport;
 	}
 	proutn("Reset damage? ");
 	if (ja() != 0) {
 		int i;
 		for (i=0; i <= ndevice; i++) if (damage[i] > 0.0) damage[i] = 0.0;
-		stdamtim = 1e30;
+		ship_date_chart_damaged = 1e30;
 	}
 	proutn("Toggle idebug? ");
 	if (ja() != 0) {
@@ -738,7 +742,7 @@ void debugme(void) {
 			key = scan();
 			if (key == IHALPHA &&  isit("y")) {
 				damage[i] = 10.0;
-				if (i == DRADIO) stdamtim = d.date;
+				if (i == DRADIO) ship_date_chart_damaged = g_d.stardate;
 			}
 		}
 	}
@@ -757,12 +761,12 @@ void debugme(void) {
 				case FSCMOVE: proutn("SC Move         "); break;
 				case FSCDBAS: proutn("SC Base Destroy "); break;
 			}
-			cramf(future[i]-d.date, 8, 2);
+			cramf(future[i]-g_d.stardate, 8, 2);
 			chew();
 			proutn("  ?");
 			key = scan();
 			if (key == IHREAL) {
-				future[i] = d.date + aaitem;
+				future[i] = g_d.stardate + aaitem;
 			}
 		}
 		chew();

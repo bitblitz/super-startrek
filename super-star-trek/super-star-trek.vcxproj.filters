@@ -22,6 +22,7 @@
     <None Include="sst.doc">
       <Filter>Source Files</Filter>
     </None>
+    <None Include="wierd time log.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">

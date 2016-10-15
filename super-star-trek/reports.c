@@ -12,9 +12,9 @@ void attakreport(void) {
 		cramf(future[FCDBAS], 0,1);
 		prout(".");
 	}
-	if (isatb == 1) {
+	if (is_supercommander_attacking_base == 1) {
 		proutn("Starbase in ");
-		cramlc(1, d.isx, d.isy);
+		cramlc(1, g_d.qx_supercommander, g_d.qy_supercommander);
 		prout(" is under Super-commander attack.");
 		proutn("It can hold out until Stardate ");
 		cramf(future[FSCDBAS], 0, 1);
@@ -28,13 +28,13 @@ void report(int f) {
 
 	chew();
 	s1 = (thawed?"thawed ":"");
-	switch (length) {
+	switch (game_length) {
 		case 1: s2="short"; break;
 		case 2: s2="medium"; break;
 		case 4: s2="long"; break;
 		default: s2="unknown length"; break;
 	}
-	switch (skill) {
+	switch (game_skill) {
 		case SNOVICE: s3="novice"; break;
 		case SFAIR: s3="fair"; break;
 		case SGOOD: s3="good"; break;
@@ -44,68 +44,68 @@ void report(int f) {
 	}
 	printf("\nYou %s playing a %s%s %s game.\n",
 		   alldone? "were": "are now", s1, s2, s3);
-	if (skill>SGOOD && thawed && !alldone) prout("No plaque is allowed.");
-	if (tourn) printf("This is tournament game %d.\n", tourn);
+	if (game_skill>SGOOD && thawed && !alldone) prout("No plaque is allowed.");
+	if (is_tournament_game) printf("This is tournament game %d.\n", is_tournament_game);
 	if (f) printf("Your secret password is \"%s\"\n",passwd);
 	printf("%d of %d Klingon ships have been destroyed",
-		   d.killk+d.killc+d.nsckill, inkling);
-	if (d.killc) printf(", including %d Commander%s.\n", d.killc, d.killc==1?"":"s");
-	else if (d.killk+d.nsckill > 0) prout(", but no Commanders.");
+		   g_d.killed_klingons+g_d.killed_commanders+g_d.killed_supercommanders, initial_klingons);
+	if (g_d.killed_commanders) printf(", including %d Commander%s.\n", g_d.killed_commanders, g_d.killed_commanders==1?"":"s");
+	else if (g_d.killed_klingons+g_d.killed_supercommanders > 0) prout(", but no Commanders.");
 	else prout(".");
-	if (skill > SFAIR) printf("The Super Commander has %sbeen destroyed.\n",
-						  d.nscrem?"not ":"");
-	if (d.rembase != inbase) {
+	if (game_skill > SFAIR) printf("The Super Commander has %sbeen destroyed.\n",
+						  g_d.remaining_supercommanders?"not ":"");
+	if (g_d.remaining_bases != initial_bases) {
 		proutn("There ");
-		if (inbase-d.rembase==1) proutn("has been 1 base");
+		if (initial_bases-g_d.remaining_bases==1) proutn("has been 1 base");
 		else {
 			proutn("have been ");
-			crami(inbase-d.rembase, 1);
+			crami(initial_bases-g_d.remaining_bases, 1);
 			proutn(" bases");
 		}
 		proutn(" destroyed, ");
-		crami(d.rembase, 1);
+		crami(g_d.remaining_bases, 1);
 		prout(" remaining.");
 	}
-	else printf("There are %d bases.\n", inbase);
-	if (REPORTS || iseenit) {
+	else printf("There are %d bases.\n", initial_bases);
+	if (REPORTS || has_seen_attack_report) {
 		/* Don't report this if not seen and
 			either the radio is dead or not at base! */
 		attakreport();
-		iseenit = 1;
+		has_seen_attack_report = 1;
 	}
-	if (casual) printf("%d casualt%s suffered so far.\n",
-					   casual, casual==1? "y" : "ies");
+	if (num_casualties) printf("%d casualt%s suffered so far.\n",
+					   num_casualties, num_casualties==1? "y" : "ies");
 #ifdef CAPTURE
     if (brigcapacity != brigfree) printf("%d Klingon%s in brig.\n",
     							brigcapacity-brigfree, brigcapacity-brigfree>1 ? "s" : "");
-    if (kcaptured > 0) printf("%d captured Klingon%s turned in to Star Fleet.\n", 
-                               kcaptured, kcaptured>1 ? "s" : "");
+    if (captured_klingons > 0) printf("%d captured Klingon%s turned in to Star Fleet.\n", 
+                               captured_klingons, captured_klingons>1 ? "s" : "");
 #endif
-	if (nhelp) printf("There were %d call%s for help.\n",
-					  nhelp, nhelp==1 ? "" : "s");
-	if (ship == IHE) {
+	if (game_num_help_calls) printf("There were %d call%s for help.\n",
+					  game_num_help_calls, game_num_help_calls==1 ? "" : "s");
+	if (ship_name == IH_ENTERPRISE) {
 		proutn("You have ");
-		if (nprobes) crami(nprobes,1);
+		if (remaining_probes) crami(remaining_probes,1);
 		else proutn("no");
 		proutn(" deep space probe");
-		if (nprobes!=1) proutn("s");
+		if (remaining_probes!=1) proutn("s");
 		prout(".");
 	}
 	if (REPORTS && future[FDSPROB] != 1e30) {
-		if (isarmed) 
+		if (is_probe_armed) 
 			proutn("An armed deep space probe is in");
 		else
 			proutn("A deep space probe is in");
-		cramlc(1, probecx, probecy);
+		cramlc(1, probe_qx, probe_qy);
 		prout(".");
 	}
-	if (icrystl) {
-		if (cryprob <= .05)
+	if (have_crystals) {
+		if (crystal_prob_fail <= .05)
 			prout("Dilithium crystals aboard ship...not yet used.");
 		else {
 			int i=0;
 			double ai = 0.05;
-			while (cryprob > ai) {
+			while (crystal_prob_fail > ai) {
 				ai *= 2.0;
 				i++;
 			}
@@ -121,7 +121,7 @@ void lrscan(void) {
 	chew();
 	if (damage[DLRSENS] != 0.0) {
 		/* Now allow base's sensors if docked */
-		if (condit != IHDOCKED) {
+		if (ship_condition != IHDOCKED) {
 			prout("LONG-RANGE SENSORS DAMAGED.");
 			return;
 		}
@@ -140,12 +140,12 @@ void lrscan(void) {
 			if (x == 0 || x > 8 || y == 0 || y > 8)
 				printf("   -1");
 			else {
-				printf("%5d", d.galaxy[x][y]);
+				printf("%5d", g_d.galaxy[x][y]);
 				// If radio works, mark star chart so
 				// it will show current information.
 				// Otherwise mark with current
 				// value which is fixed. 
-				starch[x][y] = damage[DRADIO] > 0 ? d.galaxy[x][y]+1000 :1;
+				starch[x][y] = damage[DRADIO] > 0 ? g_d.galaxy[x][y]+1000 :1;
 			}
 		}
 		putchar('\n');
@@ -156,12 +156,12 @@ void lrscan(void) {
 			if (x == 0 || x > 8 || y == 0 || y > 8)
 				printf("   -1");
 			else {
-				printf("%5d", d.galaxy[x][y]);
+				printf("%5d", g_d.galaxy[x][y]);
 				// If radio works, mark star chart so
 				// it will show current information.
 				// Otherwise mark with current
 				// value which is fixed. 
-				starch[x][y] = damage[DRADIO] > 0 ? d.galaxy[x][y]+1000 :1;
+				starch[x][y] = damage[DRADIO] > 0 ? g_d.galaxy[x][y]+1000 :1;
 			}
 		}
 		putchar('\n');
@@ -196,23 +196,23 @@ void chart(int nn) {
 
 	chew();
 	skip(1);
-	if (stdamtim != 1e30 && stdamtim != d.date && condit == IHDOCKED) {
+	if (ship_date_chart_damaged != 1e30 && ship_date_chart_damaged != g_d.stardate && ship_condition == IHDOCKED) {
 		prout("Spock-  \"I revised the Star Chart from the");
 		prout("  starbase's records.\"");
 		skip(1);
 	}
 	if (nn == 0) prout("STAR CHART FOR THE KNOWN GALAXY");
-	if (stdamtim != 1e30) {
-		if (condit == IHDOCKED) {
+	if (ship_date_chart_damaged != 1e30) {
+		if (ship_condition == IHDOCKED) {
 			/* We are docked, so restore chart from base information -- these values won't update! */
-			stdamtim = d.date;
+			ship_date_chart_damaged = g_d.stardate;
 			for (i=1; i <= 8 ; i++)
 				for (j=1; j <= 8; j++)
-					if (starch[i][j] == 1) starch[i][j] = d.galaxy[i][j]+1000;
+					if (starch[i][j] == 1) starch[i][j] = g_d.galaxy[i][j]+1000;
 		}
 		else {
 			proutn("(Last surveillance update ");
-			cramf(d.date-stdamtim, 0, 1);
+			cramf(g_d.stardate-ship_date_chart_damaged, 0, 1);
 			prout(" stardates ago.)");
 		}
 	}
@@ -232,7 +232,7 @@ void chart(int nn) {
 			else if (starch[i][j] > 999) // Memorized value
 				printf("%5d", starch[i][j]-1000);
 			else
-				printf("%5d", d.galaxy[i][j]); // What is actually there (happens when value is 1)
+				printf("%5d", g_d.galaxy[i][j]); // What is actually there (happens when value is 1)
 		}
 		prout("  -");
 	}
@@ -247,7 +247,7 @@ void chart(int nn) {
 			else if (starch[i][j] > 999) // Memorized value
 				printf("%5d", starch[i][j]-1000);
 			else
-				printf("%5d", d.galaxy[i][j]); // What is actually there (happens when value is 1)
+				printf("%5d", g_d.galaxy[i][j]); // What is actually there (happens when value is 1)
 		}
 		prout("  -");
 	}
@@ -265,13 +265,13 @@ void srscan(int l) {
 	static char requests[][3] =
 		{"","da","co","po","ls","wa","en","to","sh","kl","ti"};
 	char *cp;
-	int leftside=TRUE, rightside=TRUE, i, j, jj, k=0, nn=FALSE;
+	int leftside=TRUE, rightside=TRUE, i, j, /*jj,*/ k=0, nn=FALSE;
 	int goodScan=TRUE;
 	switch (l) {
 		case 1: // SRSCAN
 			if (damage[DSRSENS] != 0) {
 				/* Allow base's sensors if docked */
-				if (condit != IHDOCKED) {
+				if (ship_condition != IHDOCKED) {
 					prout("SHORT-RANGE SENSORS DAMAGED");
 					goodScan=FALSE;
 				}
@@ -280,7 +280,7 @@ void srscan(int l) {
 			}
 			if (goodScan)
 				starch[quadx][quady] = damage[DRADIO]>0.0 ?
-									   d.galaxy[quadx][quady]+1000:1;
+									   g_d.galaxy[quadx][quady]+1000:1;
 			scan();
 			if (isit("chart")) nn = TRUE;
 			if (isit("no")) rightside = FALSE;
@@ -296,7 +296,7 @@ void srscan(int l) {
 					break;
 			if (k > 10) {
 				prout("UNRECOGNIZED REQUEST. Legal requests are:\n"
-					 "  date, condition, position, lsupport, warpfactor,\n"
+					 "  stardate, condition, position, lsupport, warpfactor,\n"
 					 "  energy, torpedoes, shields, klingons, time.");
 				return;
 			}
@@ -330,11 +330,11 @@ void srscan(int l) {
 		if (rightside) {
 			switch (jj) {
 				case 1:
-					printf(" Stardate      %.1f", d.date);
+					printf(" Stardate      %.1f", g_d.stardate);
 					break;
 				case 2:
-					if (condit != IHDOCKED) newcnd();
-					switch (condit) {
+					if (ship_condition != IHDOCKED) newcnd();
+					switch (ship_condition) {
 						case IHRED: cp = "RED"; break;
 						case IHGREEN: cp = "GREEN"; break;
 						case IHYELLOW: cp = "YELLOW"; break;
@@ -354,19 +354,19 @@ void srscan(int l) {
 				case 4:
 					printf(" Life Support  ");
 					if (damage[DLIFSUP] != 0.0) {
-						if (condit == IHDOCKED)
+						if (ship_condition == IHDOCKED)
 							printf("DAMAGED, supported by starbase");
 						else
-							printf("DAMAGED, reserves=%4.2f", lsupres);
+							printf("DAMAGED, reserves=%4.2f", ship_life_support_reserves);
 					}
 					else
 						printf("ACTIVE");
 					break;
 				case 5:
-					printf(" Warp Factor   %.1f", warpfac);
+					printf(" Warp Factor   %.1f", warp_factor);
 					break;
 				case 6:
-					printf(" Energy        %.2f", energy);
+					printf(" Energy        %.2f", ship_energy);
 					break;
 				case 7:
 					printf(" Torpedoes     %d", torps);
@@ -375,18 +375,18 @@ void srscan(int l) {
 					printf(" Shields       ");
 					if (damage[DSHIELD] != 0)
 						printf("DAMAGED,");
-					else if (shldup)
+					else if (is_shield_up)
 						printf("UP,");
 					else
 						printf("DOWN,");
 					printf(" %d%% %.1f units",
-						   (int)((100.0*shield)/inshld + 0.5), shield);
+						   (int)((100.0*ship_shield_strength)/ship_max_shield + 0.5), ship_shield_strength);
 					break;
 				case 9:
-					printf(" Klingons Left %d", d.remkl);
+					printf(" Klingons Left %d", g_d.remaining_klingons);
 					break;
 				case 10:
-					printf(" Time Left     %.2f", d.remtime);
+					printf(" Time Left     %.2f", g_d.remaining_time);
 					break;
 			}
 					
@@ -399,7 +399,7 @@ void srscan(int l) {
 			
 			
 void eta(void) {
-	int key, ix1, ix2, iy1, iy2, prompt=FALSE;
+	int /*key,*/ ix1, ix2, iy1, iy2, prompt=FALSE;
 	int wfl;
 	double ttime, twarp, tpower;
 	if (damage[DCOMPTR] != 0.0) {
@@ -449,10 +449,10 @@ void eta(void) {
 	if (prompt) prout("Answer \"no\" if you don't know the value:");
 	while (TRUE) {
 		chew();
-		proutn("Time or arrival date? ");
+		proutn("Time or arrival stardate? ");
 		if (scan()==IHREAL) {
 			ttime = aaitem;
-			if (ttime > d.date) ttime -= d.date; // Actually a star date
+			if (ttime > g_d.stardate) ttime -= g_d.stardate; // Actually a star stardate
 			if (ttime <= 1e-10 ||
 				(twarp=(floor(sqrt((10.0*dist)/ttime)*10.0)+1.0)/10.0) > 10) {
 				prout("We'll never make it, sir.");
@@ -478,12 +478,12 @@ void eta(void) {
 	while (TRUE) {
 		chew();
 		ttime = (10.0*dist)/square(twarp);
-		tpower = dist*twarp*twarp*twarp*(shldup+1);
-		if (tpower >= energy) { // Suggestion from Ethan Staffin -- give amount needed
+		tpower = dist*twarp*twarp*twarp*(is_shield_up+1);
+		if (tpower >= ship_energy) { // Suggestion from Ethan Staffin -- give amount needed
 			prout("Insufficient energy, sir: we would need ");
 			cramf(tpower, 1, 1);
 			proutn (" units.");
-			if (shldup==0 || tpower > energy*2.0) {
+			if (is_shield_up==0 || tpower > ship_energy*2.0) {
 				if (!wfl) return;
 				proutn("New warp factor to try? ");
 				if (scan() == IHREAL) {
@@ -508,11 +508,11 @@ void eta(void) {
 		else
 			proutn("Remaining");
 		proutn(" energy will be ");
-		cramf(energy-tpower, 1, 1);
+		cramf(ship_energy-tpower, 1, 1);
 		prout(".");
 		if (wfl) {
 			proutn("And we will arrive at stardate ");
-			cramf(d.date+ttime, 1, 1);
+			cramf(g_d.stardate+ttime, 1, 1);
 			prout(".");
 		}
 		else if (twarp==1.0)
@@ -522,16 +522,16 @@ void eta(void) {
 			cramf(twarp, 1, 2);
 			skip(1);
 			proutn("and we will arrive at stardate ");
-			cramf(d.date+ttime, 1, 2);
+			cramf(g_d.stardate+ttime, 1, 2);
 			prout(".");
 		}
-		if (d.remtime < ttime)
+		if (g_d.remaining_time < ttime)
 			prout("Unfortunately, the Federation will be destroyed by then.");
 		if (twarp > 6.0)
 			prout("You'll be taking risks at that speed, Captain");
-		if ((isatb==1 && d.isy == ix1 && d.isx == iy1 &&
-			 future[FSCDBAS]< ttime+d.date)||
-			(future[FCDBAS]<ttime+d.date && baty==ix1 && batx == iy1))
+		if ((is_supercommander_attacking_base==1 && g_d.qy_supercommander == ix1 && g_d.qx_supercommander == iy1 &&
+			 future[FSCDBAS]< ttime+g_d.stardate)||
+			(future[FCDBAS]<ttime+g_d.stardate && baty==ix1 && batx == iy1))
 			prout("The starbase there will be destroyed by then.");
 		proutn("New warp factor to try? ");
 		if (scan() == IHREAL) {

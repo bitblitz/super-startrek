@@ -6,14 +6,14 @@ static int tryexit(int lookx, int looky, int ienm, int loccom, int irun) {
 	iqx = quadx+(lookx+9)/10 - 1;
 	iqy = quady+(looky+9)/10 - 1;
 	if (iqx < 1 || iqx > 8 || iqy < 1 || iqy > 8 ||
-		d.galaxy[iqx][iqy] > 899)
+		g_d.galaxy[iqx][iqy] > 899)
 		return 0; /* no can do -- neg energy, supernovae, or >8 Klingons */
-	if (ienm == IHR) return 0; /* Romulans cannot escape! */
+	if (ienm == IH_ROMULAN) return 0; /* Romulans cannot escape! */
 	if (irun == 0) {
 		/* avoid intruding on another commander's territory */
-		if (ienm == IHC) {
-			for (l = 1; l <= d.remcom; l++)
-				if (d.cx[l]==iqx && d.cy[l]==iqy) return 0;
+		if (ienm == IH_COMMANDER) {
+			for (l = 1; l <= g_d.remaining_commanders; l++)
+				if (g_d.qx_commander[l]==iqx && g_d.qy_commander[l]==iqy) return 0;
 			/* refuse to leave if currently attacking starbase */
 			if (batx==quadx && baty==quady) return 0;
 		}
@@ -23,7 +23,7 @@ static int tryexit(int lookx, int looky, int ienm, int loccom, int irun) {
 	/* print escape message and move out of quadrant.
 	   We know this if either short or long range sensors are working */
 	if (damage[DSRSENS] == 0.0 || damage[DLRSENS] == 0.0 ||
-		condit == IHDOCKED) {
+		ship_condition == IHDOCKED) {
 		proutn("***");
 		cramen(ienm);
 		proutn(" escapes to");
@@ -31,36 +31,36 @@ static int tryexit(int lookx, int looky, int ienm, int loccom, int irun) {
 		prout(" (and regains strength).");
 	}
 	/* handle local matters related to escape */
-	kx[loccom] = kx[nenhere];
-	ky[loccom] = ky[nenhere];
-	kavgd[loccom] = kavgd[nenhere];
-	kpower[loccom] = kpower[nenhere];
-	kdist[loccom] = kdist[nenhere];
-	klhere--;
-	nenhere--;
-	if (condit != IHDOCKED) newcnd();
+	kx[loccom] = kx[currentq_num_enemies];
+	ky[loccom] = ky[currentq_num_enemies];
+	kavgd[loccom] = kavgd[currentq_num_enemies];
+	kpower[loccom] = kpower[currentq_num_enemies];
+	kdist[loccom] = kdist[currentq_num_enemies];
+	currentq_num_klingons--;
+	currentq_num_enemies--;
+	if (ship_condition != IHDOCKED) newcnd();
 	/* Handle global matters related to escape */
-	d.galaxy[quadx][quady] -= 100;
-	d.galaxy[iqx][iqy] += 100;
-	if (ienm==IHS) {
-		ishere=0;
-		iscate=0;
+	g_d.galaxy[quadx][quady] -= 100;
+	g_d.galaxy[iqx][iqy] += 100;
+	if (ienm==IH_SUPER_COMMANDER) {
+		currentq_has_supercommander=0;
+		currentq_is_supercommander_here=0;
 		ientesc=0;
-		isatb=0;
-		future[FSCMOVE]=0.2777+d.date;
+		is_supercommander_attacking_base=0;
+		future[FSCMOVE]=0.2777+g_d.stardate;
 		future[FSCDBAS]=1e30;
-		d.isx=iqx;
-		d.isy=iqy;
+		g_d.qx_supercommander=iqx;
+		g_d.qy_supercommander=iqy;
 	}
 	else {
-		for (l=1; l<=d.remcom; l++) {
-			if (d.cx[l]==quadx && d.cy[l]==quady) {
-				d.cx[l]=iqx;
-				d.cy[l]=iqy;
+		for (l=1; l<=g_d.remaining_commanders; l++) {
+			if (g_d.qx_commander[l]==quadx && g_d.qy_commander[l]==quady) {
+				g_d.qx_commander[l]=iqx;
+				g_d.qy_commander[l]=iqy;
 				break;
 			}
 		}
-		comhere = 0;
+		currentq_num_commanders = 0;
 	}
 	return 1; /* success */
 }
@@ -72,18 +72,18 @@ static void movebaddy(int comx, int comy, int loccom, int ienm) {
 	int krawlx, krawly;
 	int success;
 	int attempts;
-	/* This should probably be just comhere + ishere */
-	int nbaddys = skill > SGOOD ?
-				  (int)((comhere*2 + ishere*2+klhere*1.23+irhere*1.5)/2.0):
-				  (comhere + ishere);
+	/* This should probably be just currentq_num_commanders + currentq_has_supercommander */
+	int nbaddys = game_skill > SGOOD ?
+				  (int)((currentq_num_commanders*2 + currentq_has_supercommander*2+currentq_num_klingons*1.23+currentq_num_romulans*1.5)/2.0):
+				  (currentq_num_commanders + currentq_has_supercommander);
 	double dist1, forces;
 
 	dist1 = kdist[loccom];
-	mdist = dist1 + 0.5; /* Nearest integer distance */
+	mdist = (int)( dist1 + 0.5); /* Nearest integer distance */
 
 	/* If SC, check with spy to see if should hi-tail it */
-	if (ienm==IHS &&
-		(kpower[loccom] <= 500.0 || (condit==IHDOCKED && damage[DPHOTON]==0))) {
+	if (ienm==IH_SUPER_COMMANDER &&
+		(kpower[loccom] <= 500.0 || (ship_condition==IHDOCKED && damage[DPHOTON]==0))) {
 		irun = 1;
 		motion = -10;
 	}
@@ -127,13 +127,13 @@ static void movebaddy(int comx, int comy, int loccom, int ienm) {
   *  Motion is limited to skill level, except for SC hi-tailing it out.
   */
 
-		forces = kpower[loccom]+100.0*nenhere+400*(nbaddys-1);
-		if (shldup==0) forces += 1000; /* Good for enemy if shield is down! */
+		forces = kpower[loccom]+100.0*currentq_num_enemies+400*(nbaddys-1);
+		if (is_shield_up==0) forces += 1000; /* Good for enemy if shield is down! */
 		if (damage[DPHASER] == 0.0 || damage[DPHOTON] == 0.0) {
 			if (damage[DPHASER] != 0) /* phasers damaged */
 				forces += 300.0;
 			else
-				forces -= 0.2*(energy - 2500.0);
+				forces -= 0.2*(ship_energy - 2500.0);
 			if (damage[DPHOTON] != 0) /* photon torpedoes damaged */
 				forces += 300.0;
 			else
@@ -144,13 +144,13 @@ static void movebaddy(int comx, int comy, int loccom, int ienm) {
 			forces += 1000.0;
 		}
 		motion = 0;
-		if (forces <= 1000.0 && condit != IHDOCKED) /* Typical situation */
-			motion = ((forces+200.0*Rand())/150.0) - 5.0;
+		if (forces <= 1000.0 && ship_condition != IHDOCKED) /* Typical situation */
+			motion = (int) (((forces+200.0*Rand())/150.0) - 5.0);
 		else {
 			if (forces > 1000.0) /* Very strong -- move in for kill */
-				motion = (1.0-square(Rand()))*dist1 + 1.0;
-			if (condit==IHDOCKED) /* protected by base -- back off ! */
-				motion -= skill*(2.0-square(Rand()));
+				motion = (int) ((1.0-square(Rand()))*dist1 + 1.0);
+			if (ship_condition==IHDOCKED) /* protected by base -- back off ! */
+				motion -= (int) (game_skill*(2.0-square(Rand())));
 		}
 #ifdef DEBUG
 		if (idebug) {
@@ -164,7 +164,7 @@ static void movebaddy(int comx, int comy, int loccom, int ienm) {
 		/* don't move if no motion */
 		if (motion==0) return;
 		/* Limit motion according to skill */
-		if (abs(motion) > skill) motion = (motion < 0) ? -skill : skill;
+		if (abs(motion) > game_skill) motion = (motion < 0) ? -game_skill : game_skill;
 	}
 	/* calcuate preferred number of steps */
 	nsteps = motion < 0 ? -motion : motion;
@@ -220,8 +220,8 @@ static void movebaddy(int comx, int comy, int loccom, int ienm) {
 			}
 			else if (quad[lookx][looky] != IHDOT) {
 				/* See if we should ram ship */
-				if (quad[lookx][looky] == ship &&
-					(ienm == IHC || ienm == IHS)) {
+				if (quad[lookx][looky] == ship_name &&
+					(ienm == IH_COMMANDER || ienm == IH_SUPER_COMMANDER)) {
 					ram(1, ienm, comx, comy);
 					return;
 				}
@@ -257,7 +257,7 @@ static void movebaddy(int comx, int comy, int loccom, int ienm) {
 		ky[loccom] = nexty;
 		kdist[loccom] = kavgd[loccom] =
 					sqrt(square(sectx-nextx)+square(secty-nexty));
-		if (damage[DSRSENS] == 0 || condit == IHDOCKED) {
+		if (damage[DSRSENS] == 0 || ship_condition == IHDOCKED) {
 			proutn("***");
 			cramen(ienm);
 			if (kdist[loccom] < dist1) proutn(" advances to");
@@ -277,29 +277,29 @@ void movcom(void) {
 
 	/* Figure out which Klingon is the commander (or Supercommander)
 	   and do move */
-	if (comhere) for (i = 1; i <= nenhere; i++) {
+	if (currentq_num_commanders) for (i = 1; i <= currentq_num_enemies; i++) {
 		ix = kx[i];
 		iy = ky[i];
-		if (quad[ix][iy] == IHC) {
-			movebaddy(ix, iy, i, IHC);
+		if (quad[ix][iy] == IH_COMMANDER) {
+			movebaddy(ix, iy, i, IH_COMMANDER);
 			break;
 		}
 	}
-	if (ishere) for (i = 1; i <= nenhere; i++) {
+	if (currentq_has_supercommander) for (i = 1; i <= currentq_num_enemies; i++) {
 		ix = kx[i];
 		iy = ky[i];
-		if (quad[ix][iy] == IHS) {
-			movebaddy(ix, iy, i, IHS);
+		if (quad[ix][iy] == IH_SUPER_COMMANDER) {
+			movebaddy(ix, iy, i, IH_SUPER_COMMANDER);
 			break;
 		}
 	}
 	/* if skill level is high, move other Klingons and Romulans too!
 	   Move these last so they can base their actions on what the
        commander(s) do. */
-	if (skill > SGOOD) for (i = 1; i <= nenhere; i++) {
+	if (game_skill > SGOOD) for (i = 1; i <= currentq_num_enemies; i++) {
 		ix = kx[i];
 		iy = ky[i];
-		if (quad[ix][iy] == IHK || quad[ix][iy] == IHR)
+		if (quad[ix][iy] == IH_KLINGON || quad[ix][iy] == IH_ROMULAN)
 			movebaddy(ix, iy, i, quad[ix][iy]);
 	}
 
@@ -307,55 +307,56 @@ void movcom(void) {
 }
 
 static int checkdest(int iqx, int iqy, int flag, int *ipage) {
-	int i, j;
+	int i;
 
 	if ((iqx==quadx && iqy==quady) ||
 		iqx < 1 || iqx > 8 || iqy < 1 || iqy > 8 ||
-		d.galaxy[iqx][iqy] > 899) return 1;
+		g_d.galaxy[iqx][iqy] > 899) return 1;
 	if (flag) {
 		/* Avoid quadrants with bases if we want to avoid Enterprise */
-		for (i = 1; i <= d.rembase; i++)
-			if (d.baseqx[i]==iqx && d.baseqy[i]==iqy) return 1;
+		for (i = 1; i <= g_d.remaining_bases; i++)
+			if (g_d.qx_base[i]==iqx && g_d.qy_base[i]==iqy) return 1;
 	}
 
 	/* do the move */
-	d.galaxy[d.isx][d.isy] -= 100;
-	d.isx = iqx;
-	d.isy = iqy;
-	d.galaxy[d.isx][d.isy] += 100;
-	if (iscate) {
+	g_d.galaxy[g_d.qx_supercommander][g_d.qy_supercommander] -= 100;
+	g_d.qx_supercommander = iqx;
+	g_d.qy_supercommander = iqy;
+	g_d.galaxy[g_d.qx_supercommander][g_d.qy_supercommander] += 100;
+	if (currentq_is_supercommander_here) {
 		/* SC has scooted, Remove him from current quadrant */
-		iscate=0;
-		isatb=0;
-		ishere=0;
+		currentq_is_supercommander_here=0;
+		is_supercommander_attacking_base=0;
+		currentq_has_supercommander=0;
 		ientesc=0;
 		future[FSCDBAS]=1e30;
-		for (i = 1; i <= nenhere; i++) 
-			if (quad[kx[i]][ky[i]] == IHS) break;
+		for (i = 1; i <= currentq_num_enemies; i++) 
+			if (quad[kx[i]][ky[i]] == IH_SUPER_COMMANDER) break;
 		quad[kx[i]][ky[i]] = IHDOT;
-		kx[i] = kx[nenhere];
-		ky[i] = ky[nenhere];
-		kdist[i] = kdist[nenhere];
-		kavgd[i] = kavgd[nenhere];
-		kpower[i] = kpower[nenhere];
-		klhere--;
-		nenhere--;
-		if (condit!=IHDOCKED) newcnd();
+		kx[i] = kx[currentq_num_enemies];
+		ky[i] = ky[currentq_num_enemies];
+		kdist[i] = kdist[currentq_num_enemies];
+		kavgd[i] = kavgd[currentq_num_enemies];
+		kpower[i] = kpower[currentq_num_enemies];
+		currentq_num_klingons--;
+		currentq_num_enemies--;
+		if (ship_condition!=IHDOCKED) newcnd();
 		sortkl();
 	}
 	/* check for a helpful planet */
 	for (i = 1; i <= inplan; i++) {
-		if (d.plnets[i].x==d.isx && d.plnets[i].y==d.isy &&
-			d.plnets[i].crystals == 1) {
+		if (g_d.plnets[i].qx==g_d.qx_supercommander && 
+            g_d.plnets[i].qy==g_d.qy_supercommander &&
+			g_d.plnets[i].crystals == 1) {
 			/* destroy the planet */
-			d.plnets[i] = nulplanet;
-			d.newstuf[d.isx][d.isy] -= 1;
+			g_d.plnets[i] = nulplanet;
+			g_d.newstuf[g_d.qx_supercommander][g_d.qy_supercommander] -= 1;
 			if (REPORTS) {
 				if (*ipage==0) pause(1);
 				*ipage = 1;
 				prout("Lt. Uhura-  \"Captain, Starfleet Intelligence reports");
 				proutn("   a planet in");
-				cramlc(1, d.isx, d.isy);
+				cramlc(1, g_d.qx_supercommander, g_d.qy_supercommander);
 				prout(" has been destroyed");
 				prout("   by the Super-commander.\"");
 			}
@@ -380,39 +381,39 @@ void scom(int *ipage) {
 #endif
 
 	/* Decide on being active or passive */
-	flag = ((d.killc+d.killk)/(d.date+0.01-indate) < 0.1*skill*(skill+1.0) ||
-			(d.date-indate) < 3.0);
-	if (iscate==0 && flag) {
+	flag = ((g_d.killed_commanders+g_d.killed_klingons)/(g_d.stardate+0.01-game_initial_stardate) < 0.1*game_skill*(game_skill+1.0) ||
+			(g_d.stardate-game_initial_stardate) < 3.0);
+	if (currentq_is_supercommander_here==0 && flag) {
 		/* compute move away from Enterprise */
-		ideltax = d.isx-quadx;
-		ideltay = d.isy-quady;
+		ideltax = g_d.qx_supercommander-quadx;
+		ideltay = g_d.qy_supercommander-quady;
 		if (sqrt(ideltax*(double)ideltax+ideltay*(double)ideltay) > 2.0) {
 			/* circulate in space */
-			ideltax = d.isy-quady;
-			ideltay = quadx-d.isx;
+			ideltax = g_d.qy_supercommander-quady;
+			ideltay = quadx-g_d.qx_supercommander;
 		}
 	}
 	else {
 		/* compute distances to starbases */
-		if (d.rembase <= 0) {
+		if (g_d.remaining_bases <= 0) {
 			/* nothing left to do */
 			future[FSCMOVE] = 1e30;
 			return;
 		}
-		sx = d.isx;
-		sy = d.isy;
-		for (i = 1; i <= d.rembase; i++) {
+		sx = g_d.qx_supercommander;
+		sy = g_d.qy_supercommander;
+		for (i = 1; i <= g_d.remaining_bases; i++) {
 			basetbl[i] = i;
-			ibqx = d.baseqx[i];
-			ibqy = d.baseqy[i];
+			ibqx = g_d.qx_base[i];
+			ibqy = g_d.qy_base[i];
 			bdist[i] = sqrt(square(ibqx-sx) + square(ibqy-sy));
 		}
-		if (d.rembase > 1) {
+		if (g_d.remaining_bases > 1) {
 			/* sort into nearest first order */
 			int iswitch;
 			do {
 				iswitch = 0;
-				for (i=1; i < d.rembase-1; i++) {
+				for (i=1; i < g_d.remaining_bases-1; i++) {
 					if (bdist[i] > bdist[i+1]) {
 						int ti = basetbl[i];
 						double t = bdist[i];
@@ -429,34 +430,34 @@ void scom(int *ipage) {
 		   without too many Klingons, and not already under attack. */
 		ifindit = iwhichb = 0;
 
-		for (i2 = 1; i2 <= d.rembase; i2++) {
+		for (i2 = 1; i2 <= g_d.remaining_bases; i2++) {
 			i = basetbl[i2];	/* bug in original had it not finding nearest*/
-			ibqx = d.baseqx[i];
-			ibqy = d.baseqy[i];
+			ibqx = g_d.qx_base[i];
+			ibqy = g_d.qy_base[i];
 			if ((ibqx == quadx && ibqy == quady) ||
 				(ibqx == batx && ibqy == baty) ||
-				d.galaxy[ibqx][ibqy] > 899) continue;
+				g_d.galaxy[ibqx][ibqy] > 899) continue;
 			/* if there is a commander, an no other base is appropriate,
 			   we will take the one with the commander */
-			for (j = 1; j <= d.remcom; j++) {
-				if (ibqx==d.cx[j] && ibqy==d.cy[j] && ifindit!= 2) {
+			for (j = 1; j <= g_d.remaining_commanders; j++) {
+				if (ibqx==g_d.qx_commander[j] && ibqy==g_d.qy_commander[j] && ifindit!= 2) {
 						ifindit = 2;
 						iwhichb = i;
 						break;
 				}
 			}
-			if (j > d.remcom) { /* no commander -- use this one */
+			if (j > g_d.remaining_commanders) { /* no commander -- use this one */
 				ifindit = 1;
 				iwhichb = i;
 				break;
 			}
 		}
 		if (ifindit==0) return; /* Nothing suitable -- wait until next time*/
-		ibqx = d.baseqx[iwhichb];
-		ibqy = d.baseqy[iwhichb];
+		ibqx = g_d.qx_base[iwhichb];
+		ibqy = g_d.qy_base[iwhichb];
 		/* decide how to move toward base */
-		ideltax = ibqx - d.isx;
-		ideltay = ibqy - d.isy;
+		ideltax = ibqx - g_d.qx_supercommander;
+		ideltay = ibqy - g_d.qy_supercommander;
 	}
 	/* Maximum movement is 1 quadrant in either or both axis */
 	if (ideltax > 1) ideltax = 1;
@@ -465,58 +466,58 @@ void scom(int *ipage) {
 	if (ideltay < -1) ideltay = -1;
 
 	/* try moving in both x and y directions */
-	iqx = d.isx + ideltax;
-	iqy = d.isy + ideltax;
+	iqx = g_d.qx_supercommander + ideltax;
+	iqy = g_d.qy_supercommander + ideltax;
 	if (checkdest(iqx, iqy, flag, ipage)) {
 		/* failed -- try some other maneuvers */
 		if (ideltax==0 || ideltay==0) {
 			/* attempt angle move */
 			if (ideltax != 0) {
-				iqy = d.isy + 1;
+				iqy = g_d.qy_supercommander + 1;
 				if (checkdest(iqx, iqy, flag, ipage)) {
-					iqy = d.isy - 1;
+					iqy = g_d.qy_supercommander - 1;
 					checkdest(iqx, iqy, flag, ipage);
 				}
 			}
 			else {
-				iqx = d.isx + 1;
+				iqx = g_d.qx_supercommander + 1;
 				if (checkdest(iqx, iqy, flag, ipage)) {
-					iqx = d.isx - 1;
+					iqx = g_d.qx_supercommander - 1;
 					checkdest(iqx, iqy, flag, ipage);
 				}
 			}
 		}
 		else {
 			/* try moving just in x or y */
-			iqy = d.isy;
+			iqy = g_d.qy_supercommander;
 			if (checkdest(iqx, iqy, flag, ipage)) {
-				iqy = d.isy + ideltay;
-				iqx = d.isx;
+				iqy = g_d.qy_supercommander + ideltay;
+				iqx = g_d.qx_supercommander;
 				checkdest(iqx, iqy, flag, ipage);
 			}
 		}
 	}
 	/* check for a base */
-	if (d.rembase == 0) {
+	if (g_d.remaining_bases == 0) {
 		future[FSCMOVE] = 1e30;
 	}
-	else for (i=1; i<=d.rembase; i++) {
-		ibqx = d.baseqx[i];
-		ibqy = d.baseqy[i];
-		if (ibqx==d.isx && ibqy == d.isy && d.isx != batx && d.isy != baty) {
+	else for (i=1; i<=g_d.remaining_bases; i++) {
+		ibqx = g_d.qx_base[i];
+		ibqy = g_d.qy_base[i];
+		if (ibqx==g_d.qx_supercommander && ibqy == g_d.qy_supercommander && g_d.qx_supercommander != batx && g_d.qy_supercommander != baty) {
 			/* attack the base */
 			if (flag) return; /* no, don't attack base! */
-			iseenit = 0;
-			isatb=1;
-			future[FSCDBAS] = d.date + 1.0 +2.0*Rand();
-			if (batx != 0) future[FSCDBAS] += future[FCDBAS]-d.date;
+			has_seen_attack_report = 0;
+			is_supercommander_attacking_base=1;
+			future[FSCDBAS] = g_d.stardate + 1.0 +2.0*Rand();
+			if (batx != 0) future[FSCDBAS] += future[FCDBAS]-g_d.stardate;
 			if (!REPORTS)
 				return; /* no warning */
-			iseenit = 1;
+			has_seen_attack_report = 1;
 			if (*ipage == 0)  pause(1);
 			*ipage=1;
 			proutn("Lt. Uhura-  \"Captain, the starbase in");
-			cramlc(1, d.isx, d.isy);
+			cramlc(1, g_d.qx_supercommander, g_d.qy_supercommander);
 			skip(1);
 			prout("   reports that it is under attack from the Klingon Super-commander.");
 			proutn("   It can survive until stardate ");
@@ -537,13 +538,13 @@ void scom(int *ipage) {
 #endif
 		(Rand() > 0.2 ||
 		 (!REPORTS) ||
-		 starch[d.isx][d.isy] > 0))
+		 starch[g_d.qx_supercommander][g_d.qy_supercommander] > 0))
 		return;
 	if (*ipage==0) pause(1);
 	*ipage = 1;
 	prout("Lt. Uhura-  \"Captain, Starfleet Intelligence reports");
 	proutn("   the Super-commander is in");
-	cramlc(1, d.isx, d.isy);
+	cramlc(1, g_d.qx_supercommander, g_d.qy_supercommander);
 	prout(".\"");
 	return;
 }
@@ -551,60 +552,60 @@ void scom(int *ipage) {
 void movetho(void) {
 	int idx, idy, im, i, dum, my;
 	/* Move the Tholean */
-	if (ithere==0 || justin == 1) return;
+	if (currentq_has_tholian==0 || justin == 1) return;
 
-	if (ithx == 1 && ithy == 1) {
+	if (currentq_tholian_sx == 1 && currentq_tholian_sy == 1) {
 		idx = 1; idy = 10;
 	}
-	else if (ithx == 1 && ithy == 10) {
+	else if (currentq_tholian_sx == 1 && currentq_tholian_sy == 10) {
 		idx = 10; idy = 10;
 	}
-	else if (ithx == 10 && ithy == 10) {
+	else if (currentq_tholian_sx == 10 && currentq_tholian_sy == 10) {
 		idx = 10; idy = 1;
 	}
-	else if (ithx == 10 && ithy == 1) {
+	else if (currentq_tholian_sx == 10 && currentq_tholian_sy == 1) {
 		idx = 1; idy = 1;
 	}
 	else {
 		/* something is wrong! */
-		ithere = 0;
+		currentq_has_tholian = 0;
 		return;
 	}
 
 	/* Do nothing if we are blocked */
-	if (quad[idx][idy]!= IHDOT && quad[idx][idy]!= IHWEB) return;
-	quad[ithx][ithy] = IHWEB;
+	if (quad[idx][idy]!= IHDOT && quad[idx][idy]!= IH_THOLIAN_WEB) return;
+	quad[currentq_tholian_sx][currentq_tholian_sy] = IH_THOLIAN_WEB;
 
-	if (ithx != idx) {
+	if (currentq_tholian_sx != idx) {
 		/* move in x axis */
-		im = fabs((double)idx - ithx)/((double)idx - ithx);
-		while (ithx != idx) {
-			ithx += im;
-			if (quad[ithx][ithy]==IHDOT) quad[ithx][ithy] = IHWEB;
+		im = (int)(fabs((double)idx - currentq_tholian_sx)/((double)idx - currentq_tholian_sx));
+		while (currentq_tholian_sx != idx) {
+			currentq_tholian_sx += im;
+			if (quad[currentq_tholian_sx][currentq_tholian_sy]==IHDOT) quad[currentq_tholian_sx][currentq_tholian_sy] = IH_THOLIAN_WEB;
 		}
 	}
-	else if (ithy != idy) {
+	else if (currentq_tholian_sy != idy) {
 		/* move in y axis */
-		im = fabs((double)idy - ithy)/((double)idy - ithy);
-		while (ithy != idy) {
-			ithy += im;
-			if (quad[ithx][ithy]==IHDOT) quad[ithx][ithy] = IHWEB;
+		im = (int)fabs(((double)idy - currentq_tholian_sy)/((double)idy - currentq_tholian_sy));
+		while (currentq_tholian_sy != idy) {
+			currentq_tholian_sy += im;
+			if (quad[currentq_tholian_sx][currentq_tholian_sy]==IHDOT) quad[currentq_tholian_sx][currentq_tholian_sy] = IH_THOLIAN_WEB;
 		}
 	}
-	quad[ithx][ithy] = IHT;
+	quad[currentq_tholian_sx][currentq_tholian_sy] = IH_THOLIAN;
 
 	/* check to see if all holes plugged */
 	for (i = 1; i < 11; i++) {
-		if (quad[1][i]!=IHWEB && quad[1][i]!=IHT) return;
-		if (quad[10][i]!=IHWEB && quad[10][i]!=IHT) return;
-		if (quad[i][1]!=IHWEB && quad[i][1]!=IHT) return;
-		if (quad[i][10]!=IHWEB && quad[i][10]!=IHT) return;
+		if (quad[1][i]!=IH_THOLIAN_WEB && quad[1][i]!=IH_THOLIAN) return;
+		if (quad[10][i]!=IH_THOLIAN_WEB && quad[10][i]!=IH_THOLIAN) return;
+		if (quad[i][1]!=IH_THOLIAN_WEB && quad[i][1]!=IH_THOLIAN) return;
+		if (quad[i][10]!=IH_THOLIAN_WEB && quad[i][10]!=IH_THOLIAN) return;
 	}
 	/* All plugged up -- Tholian splits */
-	quad[ithx][ithy]=IHWEB;
-	dropin(IHBLANK, &dum, &my);
-	crmena(1,IHT, 2, ithx, ithy);
+	quad[currentq_tholian_sx][currentq_tholian_sy]=IH_THOLIAN_WEB;
+	dropin(IH_BLACK_HOLE, &dum, &my);
+	crmena(1,IH_THOLIAN, 2, currentq_tholian_sx, currentq_tholian_sy);
 	prout(" completes web.");
-	ithere = ithx = ithy = 0;
+	currentq_has_tholian = currentq_tholian_sx = currentq_tholian_sy = 0;
 	return;
 }

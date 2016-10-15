@@ -5,7 +5,7 @@ void cloak(void) {
 	int key;
 	enum {NONE, CLON, CLOFF} action = NONE;
 
-	if (ship == IHF) {
+	if (ship_name == IH_FAERIE_QUEEN) {
 		prout("Ye Faerie Queene has no cloaking device.");
 		return;
 	}
@@ -48,19 +48,19 @@ void cloak(void) {
 	}
 
     if (action==CLOFF) {
-        if (irhere && d.date >= ALGERON && !isviolreported) {
+        if (currentq_num_romulans && g_d.stardate >= ALGERON && !is_cloak_violation_reported) {
             prout("Spock- \"Captain, the Treaty of Algeron is in effect.\n   Are you sure this is wise?\"");
             if (ja() == 0) return;
         }
 		prout("Engineer Scott- \"Aye, Sir.\"");
         iscloaked = FALSE;
-        if (irhere && d.date >= ALGERON && !isviolreported) {
+        if (currentq_num_romulans && g_d.stardate >= ALGERON && !is_cloak_violation_reported) {
             prout("The Romulan ship discovers you are breaking the Treaty of Algeron!");
-            ncviol++;
-            isviolreported = TRUE;
+            num_cloak_violations++;
+            is_cloak_violation_reported = TRUE;
         }
             
-//        if (neutz && d.date >= ALGERON) finish(FCLOAK);
+//        if (in_neutral_zone && g_d.stardate >= ALGERON) finish(FCLOAK);
 		return;
 	}
 
@@ -69,12 +69,12 @@ void cloak(void) {
 		return;
 	}
 
-	if (condit==IHDOCKED) {
+	if (ship_condition==IHDOCKED) {
 		prout("You cannot cloak while docked.");
 		return;
 	}
 
-	if (d.date >= ALGERON && !isviolreported)
+	if (g_d.stardate >= ALGERON && !is_cloak_violation_reported)
 	{
 		prout("Spock- \"Captain, using the cloaking device is be a violation");
 		prout("  of the Treaty of Algeron. Considering the alternatives,");
@@ -84,10 +84,10 @@ void cloak(void) {
 
 	prout("Engineer Scott- \"The cloaking device has been engaged, Sir.\"");
 	iscloaking = TRUE;
-    if (irhere && d.date >= ALGERON && !isviolreported) {
+    if (currentq_num_romulans && g_d.stardate >= ALGERON && !is_cloak_violation_reported) {
         prout("The Romulan ship discovers you are breaking the Treaty of Algeron!");
-        ncviol++;
-        isviolreported = TRUE;
+        num_cloak_violations++;
+        is_cloak_violation_reported = TRUE;
     }
 }
 #endif
@@ -126,7 +126,7 @@ void sheild(int i) {
 				prout("Shields damaged and down.");
 				return;
 			}
-			else if (shldup) {
+			else if (is_shield_up) {
 				proutn("Shields are up. Do you want them down? ");
 				if (ja()) action = SHDN;
 				else {
@@ -146,15 +146,15 @@ void sheild(int i) {
 	}
 	switch (action) {
 		case SHUP: /* raise shields */
-			if (shldup) {
+			if (is_shield_up) {
 				prout("Shields already up.");
 				return;
 			}
-			shldup = 1;
-			shldchg = 1;
-			if (condit != IHDOCKED) energy -= 50.0;
+			is_shield_up = 1;
+			is_shield_changing = 1;
+			if (ship_condition != IHDOCKED) ship_energy -= 50.0;
 			prout("Shields raised.");
-			if (energy <= 0) {
+			if (ship_energy <= 0) {
 				skip(1);
 				prout("Shields raising uses up last of energy.");
 				finish(FNRG);
@@ -163,12 +163,12 @@ void sheild(int i) {
 			ididit=1;
 			return;
 		case SHDN:
-			if (shldup==0) {
+			if (is_shield_up==0) {
 				prout("Shields already down.");
 				return;
 			}
-			shldup=0;
-			shldchg=1;
+			is_shield_up=0;
+			is_shield_changing=1;
 			prout("Shields lowered.");
 			ididit=1;
 			return;
@@ -179,21 +179,21 @@ void sheild(int i) {
 			}
 			chew();
 			if (aaitem==0) return;
-			if (aaitem > energy) {
+			if (aaitem > ship_energy) {
 				prout("Insufficient ship energy.");
 				return;
 			}
 			ididit = 1;
-			if (shield+aaitem >= inshld) {
+			if (ship_shield_strength+aaitem >= ship_max_shield) {
 				prout("Shield energy maximized.");
-				if (shield+aaitem > inshld) {
+				if (ship_shield_strength+aaitem > ship_max_shield) {
 					prout("Excess energy requested returned to ship energy");
 				}
-				energy -= inshld-shield;
-				shield = inshld;
+				ship_energy -= ship_max_shield-ship_shield_strength;
+				ship_shield_strength = ship_max_shield;
 				return;
 			}
-			if (aaitem < 0.0 && energy-aaitem > inenrg) {
+			if (aaitem < 0.0 && ship_energy-aaitem > ship_max_energy) {
 				/* Prevent shield drain loophole */
 				skip(1);
 				prout("Engineering to bridge--");
@@ -202,10 +202,10 @@ void sheild(int i) {
 				ididit = 0;
 				return;
 			}
-			if (shield+aaitem < 0) {
+			if (ship_shield_strength+aaitem < 0) {
 				prout("All shield energy transferred to ship.");
-				energy += shield;
-				shield = 0.0;
+				ship_energy += ship_shield_strength;
+				ship_shield_strength = 0.0;
 				return;
 			}
 			proutn("Scotty- \"");
@@ -213,8 +213,8 @@ void sheild(int i) {
 				prout("Transferring energy to shields.\"");
 			else
 				prout("Draining energy from shields.\"");
-			shield += aaitem;
-			energy -= aaitem;
+			ship_shield_strength += aaitem;
+			ship_energy -= aaitem;
 			return;
 		case NONE: break;
 	}
@@ -231,10 +231,10 @@ void ram(int ibumpd, int ienm, int ix, int iy) {
 	proutn("***");
 	crmshp();
 	switch (ienm) {
-		case IHR: type = 1.5; break;
-		case IHC: type = 2.0; break;
-		case IHS: type = 2.5; break;
-		case IHT: type = 0.5; break;
+		case IH_ROMULAN: type = 1.5; break;
+		case IH_COMMANDER: type = 2.0; break;
+		case IH_SUPER_COMMANDER: type = 2.5; break;
+		case IH_THOLIAN: type = 0.5; break;
 	}
 	proutn(ibumpd ? " rammed by " : " rams ");
 	crmena(0, ienm, 2, ix, iy);
@@ -244,19 +244,19 @@ void ram(int ibumpd, int ienm, int ix, int iy) {
 	proutn("***");
 	crmshp();
 	prout(" heavily damaged.");
-	icas = 10.0+20.0*Rand();
+	icas = (int)(10.0+20.0*Rand());
 	proutn("***Sickbay reports ");
 	crami(icas, 1);
 	prout(" casualties.");
-	casual += icas;
+	num_casualties += icas;
 	for (l=1; l <= ndevice; l++) {
 		if (l == DDRAY) continue; // Don't damage deathray 
 		if (damage[l] < 0) continue;
-		extradm = (10.0*type*Rand()+1.0)*damfac;
+		extradm = (10.0*type*Rand()+1.0)*game_damage_factor;
 		damage[l] += Time + extradm; /* Damage for at least time of travel! */
 	}
-	shldup = 0;
-	if (d.remkl) {
+	is_shield_up = 0;
+	if (g_d.remaining_klingons) {
 		pause(2);
 		dreprt();
 	}
@@ -280,10 +280,10 @@ void torpedo(double course, double r, int inx, int iny, double *hit) {
 	/* Loop to move a single torpedo */
 	for (l=1; l <= 15; l++) {
 		x += deltax;
-		ix = x + 0.5;
+		ix = (int)(x + 0.5);
 		if (ix < 1 || ix > 10) break;
 		y += deltay;
-		iy = y + 0.5;
+		iy = (int)(y + 0.5);
 		if (iy < 1 || iy > 10) break;
 		if (l==4 || l==9) skip(1);
 		cramf(x, 0, 1);
@@ -295,8 +295,8 @@ void torpedo(double course, double r, int inx, int iny, double *hit) {
 		/* hit something */
 		skip(1);
 		switch(iquad) {
-			case IHE: /* Hit our ship */
-			case IHF:
+			case IH_ENTERPRISE: /* Hit our ship */
+			case IH_FAERIE_QUEEN:
 				skip(1);
 				proutn("Torpedo hits ");
 				crmshp();
@@ -307,16 +307,16 @@ void torpedo(double course, double r, int inx, int iny, double *hit) {
 				*hit = fabs(*hit);
 				newcnd(); /* undock */
 				/* We may be displaced. */
-				if (landed==1) return; /* Cheat if on a planet */
+				if (is_landed==1) return; /* Cheat if on a planet */
 				ang = angle + 2.5*(Rand()-0.5);
 				temp = fabs(sin(ang));
 				if (fabs(cos(ang)) > temp) temp = fabs(cos(ang));
 				xx = -sin(ang)/temp;
 				yy = cos(ang)/temp;
-				jx=ix+xx+0.5;
-				jy=iy+yy+0.5;
+				jx=(int)(ix+xx+0.5);
+				jy=(int)(iy+yy+0.5);
 				if (jx<1 || jx>10 || jy<1 ||jy > 10) return;
-				if (quad[jx][jy]==IHBLANK) {
+				if (quad[jx][jy]==IH_BLACK_HOLE) {
 					finish(FHOLE);
 					return;
 				}
@@ -330,18 +330,18 @@ void torpedo(double course, double r, int inx, int iny, double *hit) {
 				shoved = 1;
 				break;
 					  
-			case IHC: /* Hit a commander */
-			case IHS:
+			case IH_COMMANDER: /* Hit a commander */
+			case IH_SUPER_COMMANDER:
 				if (Rand() <= 0.05) {
 					crmena(1, iquad, 2, ix, iy);
 					prout(" uses anti-photon device;");
 					prout("   torpedo neutralized.");
 					return;
 				}
-			case IHR: /* Hit a regular enemy */
-			case IHK:
+			case IH_ROMULAN: /* Hit a regular enemy */
+			case IH_KLINGON:
 				/* find the enemy */
-				for (ll=1; ll <= nenhere; ll++)
+				for (ll=1; ll <= currentq_num_enemies; ll++)
 					if (ix==kx[ll] && iy==ky[ll]) break;
 				kp = fabs(kpower[ll]);
 				h1 = 700.0 + 100.0*Rand() -
@@ -361,13 +361,13 @@ void torpedo(double course, double r, int inx, int iny, double *hit) {
 				if (fabs(cos(ang)) > temp) temp = fabs(cos(ang));
 				xx = -sin(ang)/temp;
 				yy = cos(ang)/temp;
-				jx=ix+xx+0.5;
-				jy=iy+yy+0.5;
+				jx=(int)(ix+xx+0.5);
+				jy=(int)(iy+yy+0.5);
 				if (jx<1 || jx>10 || jy<1 ||jy > 10) {
 					prout(" damaged but not destroyed.");
 					return;
 				}
-				if (quad[jx][jy]==IHBLANK) {
+				if (quad[jx][jy]==IH_BLACK_HOLE) {
 					prout(" buffeted into black hole.");
 					deadkl(ix, iy, iquad, jx, jy);
 					return;
@@ -382,46 +382,46 @@ void torpedo(double course, double r, int inx, int iny, double *hit) {
 				ky[ll] = jy;
 				shoved = 1;
 				break;
-			case IHB: /* Hit a base */
+			case IH_BASE: /* Hit a base */
 				prout("***STARBASE DESTROYED..");
 				if (starch[quadx][quady] < 0) starch[quadx][quady] = 0;
-				for (ll=1; ll<=d.rembase; ll++) {
-					if (d.baseqx[ll]==quadx && d.baseqy[ll]==quady) {
-						d.baseqx[ll]=d.baseqx[d.rembase];
-						d.baseqy[ll]=d.baseqy[d.rembase];
+				for (ll=1; ll<=g_d.remaining_bases; ll++) {
+					if (g_d.qx_base[ll]==quadx && g_d.qy_base[ll]==quady) {
+						g_d.qx_base[ll]=g_d.qx_base[g_d.remaining_bases];
+						g_d.qy_base[ll]=g_d.qy_base[g_d.remaining_bases];
 						break;
 					}
 				}
 				quad[ix][iy]=IHDOT;
-				d.rembase--;
-				basex=basey=0;
-				d.galaxy[quadx][quady] -= 10;
-				d.basekl++;
+				g_d.remaining_bases--;
+				currentq_base_sx=currentq_base_sy=0;
+				g_d.galaxy[quadx][quady] -= 10;
+				g_d.killed_bases++;
 				newcnd();
 				return;
-			case IHP: /* Hit a planet */
+			case IH_PLANET: /* Hit a planet */
 				crmena(1, iquad, 2, ix, iy);
 				prout(" destroyed.");
-				d.nplankl++;
-				d.newstuf[quadx][quady] -= 1;
-				d.plnets[iplnet] = nulplanet;
-				iplnet = 0;
-				plnetx = plnety = 0;
+				g_d.killed_planets++;
+				g_d.newstuf[quadx][quady] -= 1;
+				g_d.plnets[currentq_planet_id] = nulplanet;
+				currentq_planet_id = 0;
+				currentq_planet_sx = currentq_planet_sy = 0;
 				quad[ix][iy] = IHDOT;
-				if (landed==1) {
+				if (is_landed==1) {
 					/* captain parishes on planet */
 					finish(FDPLANET);
 				}
 				return;
-			case IHSTAR: /* Hit a star */
+			case IH_STAR: /* Hit a star */
 				if (Rand() > 0.10) {
 					nova(ix, iy);
 					return;
 				}
-				crmena(1, IHSTAR, 2, ix, iy);
+				crmena(1, IH_STAR, 2, ix, iy);
 				prout(" unaffected by photon blast.");
 				return;
-			case IHQUEST: /* Hit a thingy */
+			case IHQUEST: /* Hit a qy_thing */
 				skip(1);
 				prouts("AAAAIIIIEEEEEEEEAAAAAAAAUUUUUGGGGGHHHHHHHHHHHH!!!");
 				skip(1);
@@ -432,18 +432,18 @@ void torpedo(double course, double r, int inx, int iny, double *hit) {
 				skip(1);
 				quad[ix][iy] = IHDOT;
 				return;
-			case IHBLANK: /* Black hole */
+			case IH_BLACK_HOLE: /* Black hole */
 				skip(1);
-				crmena(1, IHBLANK, 2, ix, iy);
+				crmena(1, IH_BLACK_HOLE, 2, ix, iy);
 				prout(" swallows torpedo.");
 				return;
-			case IHWEB: /* hit the web */
+			case IH_THOLIAN_WEB: /* hit the web */
 				skip(1);
 				prout("***Torpedo absorbed by Tholian web.");
 				return;
-			case IHT:  /* Hit a Tholian */
+			case IH_THOLIAN:  /* Hit a Tholian */
 				skip(1);
-				crmena(1, IHT, 2, ix, iy);
+				crmena(1, IH_THOLIAN, 2, ix, iy);
 				h1 = 700.0 + 100.0*Rand() -
 					 1000.0*sqrt(square(ix-inx)+square(iy-iny))*
 					 fabs(sin(bullseye-angle));
@@ -451,8 +451,8 @@ void torpedo(double course, double r, int inx, int iny, double *hit) {
 				if (h1 >= 600) {
 					prout(" destroyed.");
 					quad[ix][iy] = IHDOT;
-					ithere = 0;
-					ithx = ithy = 0;
+					currentq_has_tholian = 0;
+					currentq_tholian_sx = currentq_tholian_sy = 0;
 					return;
 				}
 				if (Rand() > 0.05) {
@@ -460,11 +460,11 @@ void torpedo(double course, double r, int inx, int iny, double *hit) {
 					return;
 				}
 				prout(" disappears.");
-				quad[ix][iy] = IHWEB;
-				ithere = ithx = ithy = 0;
+				quad[ix][iy] = IH_THOLIAN_WEB;
+				currentq_has_tholian = currentq_tholian_sx = currentq_tholian_sy = 0;
 				{
 					int dum, my;
-					dropin(IHBLANK, &dum, &my);
+					dropin(IH_BLACK_HOLE, &dum, &my);
 				}
 				return;
 					
@@ -483,7 +483,7 @@ void torpedo(double course, double r, int inx, int iny, double *hit) {
 		proutn(" displaced by blast to");
 		cramlc(2, jx, jy);
 		skip(1);
-		for (ll=1; ll<=nenhere; ll++)
+		for (ll=1; ll<=currentq_num_enemies; ll++)
 			kdist[ll] = kavgd[ll] = sqrt(square(sectx-kx[ll])+square(secty-ky[ll]));
 		sortkl();
 		return;
@@ -495,25 +495,25 @@ void torpedo(double course, double r, int inx, int iny, double *hit) {
 
 static void fry(double hit) {
 	double ncrit, extradm;
-	int ktr=1, l, ll, j, cdam[6], crptr;
+	int ktr=1, l, ll, j, cdam[6];//, crptr;
 
 	/* a critical hit occured */
-	if (hit < (275.0-25.0*skill)*(1.0+0.5*Rand())) return;
+	if (hit < (275.0-25.0*game_skill)*(1.0+0.5*Rand())) return;
 
 	ncrit = 1.0 + hit/(500.0+100.0*Rand());
 	proutn("***CRITICAL HIT--");
 	/* Select devices and cause damage */
 	for (l = 1; l <= ncrit; l++) {
 		do {
-			j = ndevice*Rand()+1.0;
+			j = (int)(ndevice*Rand()+1.0);
 			/* Cheat to prevent shuttle damage unless on ship */
-		} while (damage[j] < 0.0 || (j == DSHUTTL && iscraft != 1) ||
+		} while (damage[j] < 0.0 || (j == DSHUTTL && has_suttlecraft != 1) ||
 #ifdef CLOAKING
-				 (j == DCLOAK && ship != IHE) ||
+				 (j == DCLOAK && ship_name != IH_ENTERPRISE) ||
 #endif
 				 j == DDRAY);
 		cdam[l] = j;
-		extradm = (hit*damfac)/(ncrit*(75.0+25.0*Rand()));
+		extradm = (hit*game_damage_factor)/(ncrit*(75.0+25.0*Rand()));
 		damage[j] += extradm;
 		if (l > 1) {
 			for (ll=2; ll<=l && j != cdam[ll-1]; ll++) ;
@@ -525,9 +525,9 @@ static void fry(double hit) {
 		proutn(device[j]);
 	}
 	prout(" damaged.");
-	if (damage[DSHIELD] && shldup) {
+	if (damage[DSHIELD] && is_shield_up) {
 		prout("***Shields knocked down.");
-		shldup=0;
+		is_shield_up=0;
 	}
 #ifdef CLOAKING
 	if (damage[DCLOAK] && iscloaked)
@@ -555,35 +555,35 @@ void attack(int k) {
 	if (idebug) prout("ATTACK!");
 #endif
 
-	if (ithere) movetho();
+	if (currentq_has_tholian) movetho();
 
-	if (neutz) { /* The one chance not to be attacked */
-		neutz = 0;
+	if (in_neutral_zone) { /* The one chance not to be attacked */
+		in_neutral_zone = 0;
 		return;
 	}
-	if (((comhere || ishere) && (justin == 0)) || skill == SEMERITUS) movcom();
-	if (nenhere==0) return;
-	pfac = 1.0/inshld;
-	if (shldchg == 1) chgfac = 0.25+0.5*Rand();
+	if (((currentq_num_commanders || currentq_has_supercommander) && (justin == 0)) || game_skill == SEMERITUS) movcom();
+	if (currentq_num_enemies==0) return;
+	pfac = 1.0/ship_max_shield;
+	if (is_shield_changing == 1) chgfac = 0.25+0.5*Rand();
 	skip(1);
-	if (skill <= SFAIR) i = 2;
-	for (l=1; l <= nenhere; l++) {
+	if (game_skill <= SFAIR) i = 2;
+	for (l=1; l <= currentq_num_enemies; l++) {
 		if (kpower[l] < 0) continue;	/* too weak to attack */
 		/* compute hit strength and diminsh shield power */
 		r = Rand();
 		/* Increase chance of photon torpedos if docked or enemy energy low */
-		if (condit == IHDOCKED) r *= 0.25;
+		if (ship_condition == IHDOCKED) r *= 0.25;
 		if (kpower[l] < 500) r *= 0.25; 
 		jx = kx[l];
 		jy = ky[l];
 		iquad = quad[jx][jy];
-		itflag = (iquad == IHK && r > 0.0005) || k == 0 ||
-			(iquad==IHC && r > 0.015) ||
-			(iquad==IHR && r > 0.3) ||
-			(iquad==IHS && r > 0.07);
+		itflag = (iquad == IH_KLINGON && r > 0.0005) || k == 0 ||
+			(iquad==IH_COMMANDER && r > 0.015) ||
+			(iquad==IH_ROMULAN && r > 0.3) ||
+			(iquad==IH_SUPER_COMMANDER && r > 0.07);
 		if (itflag) {
 			/* Enemy uses phasers */
-			if (condit == IHDOCKED) continue; /* Don't waste the effort! */
+			if (ship_condition == IHDOCKED) continue; /* Don't waste the effort! */
 			attempt = 1; /* Attempt to attack */
 			dustfac = 0.8+0.05*Rand();
 			hit = kpower[l]*pow(dustfac,kavgd[l]);
@@ -602,22 +602,22 @@ void attack(int k) {
 			r = (Rand()+Rand())*0.5 -0.5;
 			r += 0.002*kpower[l]*r;
 			torpedo(course, r, jx, jy, &hit);
-			if (d.remkl==0) finish(FWON); /* Klingons did themselves in! */
-			if (d.galaxy[quadx][quady] == 1000 ||
+			if (g_d.remaining_klingons==0) finish(FWON); /* Klingons did themselves in! */
+			if (g_d.galaxy[quadx][quady] == 1000 ||
 				alldone) return; /* Supernova or finished */
 			if (hit == 0) continue;
 		}
-		if (shldup != 0 || shldchg != 0) {
+		if (is_shield_up != 0 || is_shield_changing != 0) {
 			/* shields will take hits */
-			double absorb, hitsh, propor = pfac*shield;
+			double absorb, hitsh, propor = pfac*ship_shield_strength;
 			if(propor < 0.1) propor = 0.1;
 			hitsh = propor*chgfac*hit+1.0;
 			atackd=1;
 			absorb = 0.8*hitsh;
-			if (absorb > shield) absorb = shield;
-			shield -= absorb;
+			if (absorb > ship_shield_strength) absorb = ship_shield_strength;
+			ship_shield_strength -= absorb;
 			hit -= hitsh;
-			if (propor > 0.1 && hit < 0.005*energy) continue;
+			if (propor > 0.1 && hit < 0.005*ship_energy) continue;
 		}
 		/* It's a hit -- print out hit size */
 		atackd = 1; /* We weren't going to check casualties, etc. if
@@ -626,7 +626,7 @@ void attack(int k) {
 		ihurt = 1;
 		cramf(hit, 0, 2);
 		proutn(" unit hit");
-		if ((damage[DSRSENS] > 0 && itflag) || skill <= SFAIR) {
+		if ((damage[DSRSENS] > 0 && itflag) || game_skill <= SFAIR) {
 			proutn(" on the ");
 			crmshp();
 		}
@@ -639,18 +639,18 @@ void attack(int k) {
 		if (hit > hitmax) hitmax = hit;
 		hittot += hit;
 		fry(hit);
-		printf("Hit %g energy %g\n", hit, energy);
-		energy -= hit;
+		printf("Hit %g energy %g\n", hit, ship_energy);
+		ship_energy -= hit;
 	}
-	if (energy <= 0) {
+	if (ship_energy <= 0) {
 		/* Returning home upon your shield, not with it... */
 		finish(FBATTLE);
 		return;
 	}
-	if (attempt == 0 && condit == IHDOCKED)
+	if (attempt == 0 && ship_condition == IHDOCKED)
 		prout("***Enemies decide against attacking your ship.");
 	if (atackd == 0) return;
-	percent = 100.0*pfac*shield+0.5;
+	percent = (int)(100.0*pfac*ship_shield_strength+0.5);
 	if (ihurt==0) {
 		/* Shields fully protect ship */
 		proutn("Enemy attack reduces shield strength to ");
@@ -659,9 +659,9 @@ void attack(int k) {
 		/* Print message if starship suffered hit(s) */
 		skip(1);
 		proutn("Energy left ");
-		cramf(energy, 0, 2);
+		cramf(ship_energy, 0, 2);
 		proutn("    shields ");
-		if (shldup) proutn("up, ");
+		if (is_shield_up) proutn("up, ");
 		else if (damage[DSHIELD] == 0) proutn("down, ");
 		else proutn("damaged, ");
 	}
@@ -671,18 +671,18 @@ void attack(int k) {
 	skip(1);
 	/* Check if anyone was hurt */
 	if (hitmax >= 200 || hittot >= 500) {
-		int icas= hittot*Rand()*0.015;
+		int icas= (int)(hittot*Rand()*0.015);
 		if (icas >= 2) {
 			skip(1);
 			proutn("Mc Coy-  \"Sickbay to bridge.  We suffered ");
 			crami(icas, 1);
 			prout(" casualties");
 			prout("   in that last attack.\"");
-			casual += icas;
+			num_casualties += icas;
 		}
 	}
 	/* After attack, reset average distance to enemies */
-	for (l = 1; l <= nenhere; l++)
+	for (l = 1; l <= currentq_num_enemies; l++)
 		kavgd[l] = kdist[l];
 	sortkl();
 	return;
@@ -695,43 +695,43 @@ void deadkl(int ix, int iy, int type, int ixx, int iyy) {
 	
 	crmena(1, type, 2, ixx, iyy);
 	/* Decide what kind of enemy it is and update approriately */
-	if (type == IHR) {
+	if (type == IH_ROMULAN) {
 		/* chalk up a Romulan */
-		d.newstuf[quadx][quady] -= 10;
-		irhere--;
-		d.nromkl++;
-		d.nromrem--;
+		g_d.newstuf[quadx][quady] -= 10;
+		currentq_num_romulans--;
+		g_d.killed_romulans++;
+		g_d.remaining_romulans--;
 	}
-	else if (type == IHT) {
+	else if (type == IH_THOLIAN) {
 		/* Killed a Tholean */
-		ithere = 0;
+		currentq_has_tholian = 0;
 	}
 	else {
 		/* Some type of a Klingon */
-		d.galaxy[quadx][quady] -= 100;
-		klhere--;
-		d.remkl--;
+		g_d.galaxy[quadx][quady] -= 100;
+		currentq_num_klingons--;
+		g_d.remaining_klingons--;
 		switch (type) {
-			case IHC:
-				comhere = 0;
-				for (i=1; i<=d.remcom; i++)
-					if (d.cx[i]==quadx && d.cy[i]==quady) break;
-				d.cx[i] = d.cx[d.remcom];
-				d.cy[i] = d.cy[d.remcom];
-				d.cx[d.remcom] = 0;
-				d.cy[d.remcom] = 0;
-				d.remcom--;
+			case IH_COMMANDER:
+				currentq_num_commanders = 0;
+				for (i=1; i<=g_d.remaining_commanders; i++)
+					if (g_d.qx_commander[i]==quadx && g_d.qy_commander[i]==quady) break;
+				g_d.qx_commander[i] = g_d.qx_commander[g_d.remaining_commanders];
+				g_d.qy_commander[i] = g_d.qy_commander[g_d.remaining_commanders];
+				g_d.qx_commander[g_d.remaining_commanders] = 0;
+				g_d.qy_commander[g_d.remaining_commanders] = 0;
+				g_d.remaining_commanders--;
 				future[FTBEAM] = 1e30;
-				if (d.remcom != 0)
-					future[FTBEAM] = d.date + expran(1.0*incom/d.remcom);
-				d.killc++;
+				if (g_d.remaining_commanders != 0)
+					future[FTBEAM] = g_d.stardate + expran(1.0*initial_commanders/g_d.remaining_commanders);
+				g_d.killed_commanders++;
 				break;
-			case IHK:
-				d.killk++;
+			case IH_KLINGON:
+				g_d.killed_klingons++;
 				break;
-			case IHS:
-				d.nscrem = ishere = d.isx = d.isy = isatb = iscate = 0;
-				d.nsckill = 1;
+			case IH_SUPER_COMMANDER:
+				g_d.remaining_supercommanders = currentq_has_supercommander = g_d.qx_supercommander = g_d.qy_supercommander = is_supercommander_attacking_base = currentq_is_supercommander_here = 0;
+				g_d.killed_supercommanders = 1;
 				future[FSCMOVE] = future[FSCDBAS] = 1e30;
 				break;
 		}
@@ -740,30 +740,30 @@ void deadkl(int ix, int iy, int type, int ixx, int iyy) {
 	/* For each kind of enemy, finish message to player */
 	prout(" destroyed.");
 	quad[ix][iy] = IHDOT;
-	if (d.remkl==0) return;
+	if (g_d.remaining_klingons==0) return;
 
-	d.remtime = d.remres/(d.remkl + 4*d.remcom);
+	g_d.remaining_time = g_d.remaining_resources/(g_d.remaining_klingons + 4*g_d.remaining_commanders);
 
-	if (type == IHT) return;
+	if (type == IH_THOLIAN) return;
 
 	/* Remove enemy ship from arrays describing local conditions */
 
-	for (i=1; i<=nenhere; i++)
+	for (i=1; i<=currentq_num_enemies; i++)
 		if (kx[i]==ix && ky[i]==iy) break;
-	nenhere--;
-	if (i <= nenhere)  {
-		for (j=i; j<=nenhere; j++) {
+	currentq_num_enemies--;
+	if (i <= currentq_num_enemies)  {
+		for (j=i; j<=currentq_num_enemies; j++) {
 			kx[j] = kx[j+1];
 			ky[j] = ky[j+1];
 			kpower[j] = kpower[j+1];
 			kavgd[j] = kdist[j] = kdist[j+1];
 		}
 	}
-	kx[nenhere+1] = 0;
-	ky[nenhere+1] = 0;
-	kdist[nenhere+1] = 0;
-	kavgd[nenhere+1] = 0;
-	kpower[nenhere+1] = 0;
+	kx[currentq_num_enemies+1] = 0;
+	ky[currentq_num_enemies+1] = 0;
+	kdist[currentq_num_enemies+1] = 0;
+	kavgd[currentq_num_enemies+1] = 0;
+	kpower[currentq_num_enemies+1] = 0;
 	return;
 }
 
@@ -818,7 +818,7 @@ void photon(void) {
 			key = scan();
 		}
 		else /* key == IHREAL */ {
-			n = aaitem + 0.5;
+			n = (int)(aaitem + 0.5);
 			if (n <= 0) { /* abort command */
 				chew();
 				return;
@@ -885,7 +885,7 @@ void photon(void) {
 	/* Loop for moving <n> torpedoes */
 	osuabor = 0;
 	for (i = 1; i <= n && !osuabor; i++) {
-		if (condit != IHDOCKED) torps--;
+		if (ship_condition != IHDOCKED) torps--;
 		r = (Rand()+Rand())*0.5 -0.5;
 		if (fabs(r) >= 0.47) {
 			/* misfire! */
@@ -902,7 +902,7 @@ void photon(void) {
 			osuabor=1;
 			if (Rand() <= 0.2) {
 				prout("***Photon tubes damaged by misfire.");
-				damage[DPHOTON] = damfac*(1.0+2.0*Rand());
+				damage[DPHOTON] = game_damage_factor*(1.0+2.0*Rand());
 				break;
 			}
 		}
@@ -910,7 +910,7 @@ void photon(void) {
 		if (iscloaked) r *= 1.2; /* Torpedoes are less accurate */
 		else
 #endif
-		if (shldup != 0 || condit == IHDOCKED) r *= 1.0 + 0.0001*shield; /* Torpedos are less accurate */
+		if (is_shield_up != 0 || ship_condition == IHDOCKED) r *= 1.0 + 0.0001*ship_shield_strength; /* Torpedos are less accurate */
 
 		if (n != 1) {
 			skip(1);
@@ -923,9 +923,9 @@ void photon(void) {
 			proutn("Torpedo track- ");
 		}
 		torpedo(course[i], r, sectx, secty, &dummy);
-		if (alldone || d.galaxy[quadx][quady]==1000) return;
+		if (alldone || g_d.galaxy[quadx][quady]==1000) return;
 	}
-	if (d.remkl==0) finish(FWON);
+	if (g_d.remaining_klingons==0) finish(FWON);
 }
 
 	
@@ -935,7 +935,7 @@ static void overheat(double rpow) {
 		double chekbrn = (rpow-1500.)*0.00038;
 		if (Rand() <= chekbrn) {
 			prout("Weapons officer Sulu-  \"Phasers overheated, sir.\"");
-			damage[DPHASER] = damfac*(1.0 + Rand()) * (1.0+chekbrn);
+			damage[DPHASER] = game_damage_factor*(1.0 + Rand()) * (1.0+chekbrn);
 		}
 	}
 }
@@ -952,10 +952,10 @@ static int checkshctrl(double rpow) {
 	/* Something bad has happened */
 	prouts("***RED ALERT!  RED ALERT!");
 	skip(2);
-	hit = rpow*shield/inshld;
-	energy -= rpow+hit*0.8;
-	shield -= hit*0.2;
-	if (energy <= 0.0) {
+	hit = rpow*ship_shield_strength/ship_max_shield;
+	ship_energy -= rpow+hit*0.8;
+	ship_shield_strength -= hit*0.2;
+	if (ship_energy <= 0.0) {
 		prouts("Sulu-  \"Captain! Shield malf***********************\"");
 		skip(1);
 		stars();
@@ -965,7 +965,7 @@ static int checkshctrl(double rpow) {
 	prouts("Sulu-  \"Captain! Shield malfunction! Phaser fire contained!\"");
 	skip(2);
 	prout("Lt. Uhura-  \"Sir, all decks reporting damage.\"");
-	icas = hit*Rand()*0.012;
+	icas = (int)(hit*Rand()*0.012);
 	skip(1);
 	fry(0.8*hit);
 	if (icas) {
@@ -974,7 +974,7 @@ static int checkshctrl(double rpow) {
 		proutn("  ");
 		crami(icas, 1);
 		prout(" casualties so far.\"");
-		casual += icas; // Changed from -=, October 2013
+		num_casualties += icas; // Changed from -=, October 2013
 	}
 	skip(1);
 	prout("Phaser energy dispersed by shields.");
@@ -994,7 +994,7 @@ void phasers(void) {
 	skip(1);
 	/* SR sensors and Computer */
 	if (damage[DSRSENS]+damage[DCOMPTR] > 0) ipoop = 0;
-	if (condit == IHDOCKED) {
+	if (ship_condition == IHDOCKED) {
 		prout("Phasers can't be fired through base shields.");
 		chew();
 		return;
@@ -1004,13 +1004,13 @@ void phasers(void) {
 		chew();
 		return;
 	}
-	if (shldup) {
+	if (is_shield_up) {
 		if (damage[DSHCTRL]) {
 			prout("High speed shield control damaged.");
 			chew();
 			return;
 		}
-		if (energy <= 200.0) {
+		if (ship_energy <= 200.0) {
 			prout("Insufficient energy to activate high-speed shield control.");
 			chew();
 			return;
@@ -1025,7 +1025,7 @@ void phasers(void) {
 		key=scan();
 		if (key == IHALPHA) {
 			if (isit("manual")) {
-				if (nenhere==0) {
+				if (currentq_num_enemies==0) {
 					prout("There is no enemy present to select.");
 					chew();
 					key = IHEOL;
@@ -1037,11 +1037,11 @@ void phasers(void) {
 				}
 			}
 			else if (isit("automatic")) {
-				if ((!ipoop) && nenhere != 0) {
+				if ((!ipoop) && currentq_num_enemies != 0) {
 					automode = FORCEMAN;
 				}
 				else {
-					if (nenhere==0)
+					if (currentq_num_enemies==0)
 						prout("Energy will be expended into space.");
 					automode = AUTOMATIC;
 					key = scan();
@@ -1057,7 +1057,7 @@ void phasers(void) {
 			}
 		}
 		else if (key == IHREAL) {
-			if (nenhere==0) {
+			if (currentq_num_enemies==0) {
 				prout("Energy will be expended into space.");
 				automode = AUTOMATIC;
 			}
@@ -1068,7 +1068,7 @@ void phasers(void) {
 		}
 		else {
 			/* IHEOL */
-			if (nenhere==0) {
+			if (currentq_num_enemies==0) {
 				prout("Energy will be expended into space.");
 				automode = AUTOMATIC;
 			}
@@ -1085,9 +1085,9 @@ void phasers(void) {
 				no = 1;
 				key = scan();
 			}
-			if (key != IHREAL && nenhere != 0) {
+			if (key != IHREAL && currentq_num_enemies != 0) {
 				proutn("Phasers locked on target. Energy available =");
-				cramf(ifast?energy-200.0:energy,1,2);
+				cramf(ifast?ship_energy-200.0:ship_energy,1,2);
 				skip(1);
 			}
 			do {
@@ -1097,13 +1097,13 @@ void phasers(void) {
 					key = scan();
 				}
 				rpow = aaitem;
-				if (rpow >= (ifast?energy-200:energy)) {
+				if (rpow >= (ifast?ship_energy-200:ship_energy)) {
 					proutn("Energy available= ");
-					cramf(ifast?energy-200:energy, 1,2);
+					cramf(ifast?ship_energy-200:ship_energy, 1,2);
 					skip(1);
 					key = IHEOL;
 				}
-			} while (rpow >= (ifast?energy-200:energy));
+			} while (rpow >= (ifast?ship_energy-200:ship_energy));
 			if (rpow<=0) {
 				/* chicken out */
 				ididit = 0;
@@ -1114,19 +1114,19 @@ void phasers(void) {
 				no = 1;
 			}
 			if (ifast) {
-				energy -= 200; /* Go and do it! */
+				ship_energy -= 200; /* Go and do it! */
 				if (checkshctrl(rpow)) return;
 			}
 			chew();
-			energy -= rpow;
+			ship_energy -= rpow;
 			extra = rpow;
-			if (nenhere) {
+			if (currentq_num_enemies) {
 				extra = 0.0;
 				powrem = rpow;
-				for (i = 1; i <= nenhere; i++) {
+				for (i = 1; i <= currentq_num_enemies; i++) {
 					hits[i] = 0.0;
 					if (powrem <= 0) continue;
-					hits[i] = fabs(kpower[i])/(phasefac*pow(0.90,kdist[i]));
+					hits[i] = fabs(kpower[i])/(PHASER_DAMAGE_FACTOR*pow(0.90,kdist[i]));
 					over = (0.01 + 0.05*Rand())*hits[i];
 					temp = powrem;
 					powrem -= hits[i] + over;
@@ -1138,9 +1138,9 @@ void phasers(void) {
 				hittem(hits);
 			}
 			if (extra > 0 && alldone == 0) {
-				if (ithere) {
+				if (currentq_has_tholian) {
 					proutn("*** Tholian web absorbs ");
-					if (nenhere>0) proutn("excess ");
+					if (currentq_num_enemies>0) proutn("excess ");
 					prout("phaser energy.");
 				}
 				else {
@@ -1166,18 +1166,18 @@ void phasers(void) {
 			}
 		case MANUAL:
 			rpow = 0.0;
-			for (k = 1; k <= nenhere;) {
+			for (k = 1; k <= currentq_num_enemies;) {
 				int ii = kx[k], jj = ky[k];
 				int ienm = quad[ii][jj];
 				if (msgflag) {
 					proutn("Energy available= ");
-					cramf(energy-.006-(ifast?200:0), 0, 2);
+					cramf(ship_energy-.006-(ifast?200:0), 0, 2);
 					skip(1);
 					msgflag = 0;
 					rpow = 0.0;
 				}
 				if (damage[DSRSENS] && !(abs(sectx-ii) < 2 && abs(secty-jj) < 2) &&
-					(ienm == IHC || ienm == IHS)) {
+					(ienm == IH_COMMANDER || ienm == IH_SUPER_COMMANDER)) {
 					cramen(ienm);
 					prout(" can't be located without short range scan.");
 					chew();
@@ -1189,8 +1189,8 @@ void phasers(void) {
 				if (key == IHEOL) {
 					chew();
 					if (ipoop && k > kz) {
-						int irec=(fabs(kpower[k])/(phasefac*pow(0.9,kdist[k])))*
-								 (1.01+0.05*Rand()) + 1.0;
+						int irec=(int)((fabs(kpower[k])/(PHASER_DAMAGE_FACTOR*pow(0.9,kdist[k])))*
+								 (1.01+0.05*Rand()) + 1.0);
 						kz = k;
 						proutn("(");
 						crami(irec, 1);
@@ -1227,7 +1227,7 @@ void phasers(void) {
 				rpow += aaitem;
 				/* If total requested is too much, inform and start over */
 				
-				if (rpow >= (ifast?energy-200:energy)) {
+				if (rpow >= (ifast?ship_energy-200:ship_energy)) {
 					prout("Available energy exceeded -- try again.");
 					chew();
 					key = IHEOL;
@@ -1247,10 +1247,10 @@ void phasers(void) {
 			if (key == IHALPHA && isit("no")) {
 				no = 1;
 			}
-			energy -= rpow;
+			ship_energy -= rpow;
 			chew();
 			if (ifast) {
-				energy -= 200.0;
+				ship_energy -= 200.0;
 				if (checkshctrl(rpow)) return;
 			}
 			hittem(hits);
@@ -1267,20 +1267,20 @@ void phasers(void) {
 				prout("Sulu-  \"Sir, the high-speed shield control has malfunctioned . . .");
 				prouts("         CLICK   CLICK   POP  . . .");
 				prout(" No  response, sir!");
-				shldup = 0;
+				is_shield_up = 0;
 			}
 			else
 				prout("Shields raised.");
 		}
 		else
-			shldup = 0;
+			is_shield_up = 0;
 	}
 	overheat(rpow);
 }
 
 void hittem(double *hits) {
 	double kp, kpow, wham, hit, dustfac, kpini;
-	int nenhr2=nenhere, k=1, kk=1, ii, jj, ienm;
+	int nenhr2=currentq_num_enemies, k=1, kk=1, ii, jj, ienm;
 
 	skip(1);
 
@@ -1290,7 +1290,7 @@ void hittem(double *hits) {
 		hit = wham*pow(dustfac,kdist[kk]);
 		kpini = kpower[kk];
 		kp = fabs(kpini);
-		if (phasefac*hit < kp) kp = phasefac*hit;
+		if (PHASER_DAMAGE_FACTOR*hit < kp) kp = PHASER_DAMAGE_FACTOR*hit;
 		kpower[kk] -= (kpower[kk] < 0 ? -kp: kp);
 		kpow = kpower[kk];
 		ii = kx[kk];
@@ -1306,7 +1306,7 @@ void hittem(double *hits) {
 		skip(1);
 		if (kpow == 0) {
 			deadkl(ii, jj, ienm, ii, jj);
-			if (d.remkl==0) finish(FWON);
+			if (g_d.remaining_klingons==0) finish(FWON);
 			if (alldone) return;
 			kk--; /* don't do the increment */
 		}
@@ -1401,7 +1401,7 @@ void
 	
 	
 	/* find out if there are any at all */
-	if (klhere < 1)
+	if (currentq_num_klingons < 1)
 	{
 		printf("Uhura- \"Getting no response, sir.\"\n");
 		return;
@@ -1416,10 +1416,10 @@ void
     /* The algorithm isn't that great and could use some more
      * intelligent design */
 //	x = 300 + 25*skill;
-	x = energy;
-	x /= kpower[k] * nenhere;
+	x = ship_energy;
+	x /= kpower[k] * currentq_num_enemies;
 	x *= 2.5;  /* would originally have been equivalent of 1.4, but we want command to work more often, more humanely */
-	i = x;
+	i = (int)x;
 #ifdef DEBUG
 	printf("Prob = %d (%.4f)\n", i, x);
 //	i = 100; // For testing, of course!
@@ -1428,7 +1428,7 @@ void
 	{
 		/* guess what, he surrendered!!! */
 		printf("Klingon captain at %d,%d surrenders\n", kx[k], ky[k]);
-		i = 200*Rand();
+		i = (int)(200*Rand());
 		if ( i > 0 )
 			printf("%d Klingons commit suicide rather than be taken captive\n", 200 - i);
 		if (i > brigfree)
@@ -1439,7 +1439,7 @@ void
 		brigfree -= i;
 		printf("%d captives taken\n", i);
 		deadkl(kx[k], ky[k], quad[kx[k]][ky[k]], kx[k], ky[k]);
-		if (d.remkl==0) finish(FWON);
+		if (g_d.remaining_klingons==0) finish(FWON);
 		return;
 	}
 
@@ -1461,15 +1461,15 @@ int selectklingon()
 {
 	int		i;
 
-	if (nenhere < 2)
+	if (currentq_num_enemies < 2)
 		i = 1;
 	else
 	{	// Select the weakest one
 		double pow  = 1e6;
 		int j;
-		for (j=1; j <= nenhere; j++)
+		for (j=1; j <= currentq_num_enemies; j++)
 		{
-			if (quad[kx[j]][ky[j]] == IHR) continue; // No Romulans surrender
+			if (quad[kx[j]][ky[j]] == IH_ROMULAN) continue; // No Romulans surrender
 			if (kpower[j]< pow)
 			{
 				pow = kpower[j];
